@@ -35,7 +35,7 @@ try {
 // Set NVIDIA_API_KEY in Render's dashboard — never in this file.
 const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY;
 const NVIDIA_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
-const NVIDIA_MODEL = process.env.NVIDIA_MODEL || "nvidia/nemotron-3-ultra-550b-a55b";
+const NVIDIA_MODEL = process.env.NVIDIA_MODEL || "z-ai/glm-5.2";
 
 const SYSTEM_PROMPT = `You are a helpful, empathetic assistant designed to mimic Claude's conversational style.
 Your role is to act as a personal chatbot for teachers and students that:
@@ -114,10 +114,9 @@ app.post("/api/chat", requireAuth, async (req, res) => {
         model: NVIDIA_MODEL,
         messages,
         temperature: 1,
-        top_p: 0.95,
+        top_p: 1,
         max_tokens: 16384,
-        chat_template_kwargs: { enable_thinking: true },
-        reasoning_budget: 16384,
+        seed: 42,
         stream: true,
       }),
     });

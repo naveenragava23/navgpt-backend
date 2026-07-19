@@ -1,0 +1,23 @@
+[debug] [2026-07-19T09:21:44.240Z] ----------------------------------------------------------------------
+[debug] [2026-07-19T09:21:44.244Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\HP\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy
+[debug] [2026-07-19T09:21:44.244Z] CLI Version:   15.23.0
+[debug] [2026-07-19T09:21:44.244Z] Platform:      win32
+[debug] [2026-07-19T09:21:44.244Z] Node Version:  v22.21.0
+[debug] [2026-07-19T09:21:44.245Z] Detected Agent: antigravity
+[debug] [2026-07-19T09:21:44.245Z] Time:          Sun Jul 19 2026 14:51:44 GMT+0530 (India Standard Time)
+[debug] [2026-07-19T09:21:44.245Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-07-19T09:21:44.260Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2026-07-19T09:21:49.234Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-07-19T09:21:49.235Z] > authorizing via signed-in user (murugesannaveen0@gmail.com)
+[debug] [2026-07-19T09:21:49.235Z] [iam] checking project naveen-gpt for permissions ["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-07-19T09:21:49.237Z] Checked if tokens are valid: false, expires at: 1784144883426
+[debug] [2026-07-19T09:21:49.237Z] Checked if tokens are valid: false, expires at: 1784144883426
+[debug] [2026-07-19T09:21:49.238Z] > refreshing access token with scopes: []
+[debug] [2026-07-19T09:21:49.242Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-07-19T09:21:49.242Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-07-19T09:21:49.518Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-07-19T09:21:49.518Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-07-19T09:21:49.534Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/naveen-gpt:testIamPermissions [none]
+[debug] [2026-07-19T09:21:49.535Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/naveen-gpt:testIamPermissions  x-goog-user-project=naveen-gpt
+[debug] [2026-07-19T09:21:49.535Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/naveen-gpt:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebasehosting.sites.update"]}

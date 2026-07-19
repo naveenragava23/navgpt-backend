@@ -21,7 +21,7 @@ admin.initializeApp({
 // Set NVIDIA_API_KEY in Render's dashboard — never in this file.
 const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY;
 const NVIDIA_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
-const NVIDIA_MODEL = process.env.NVIDIA_MODEL || "z-ai/glm-5.2";
+const NVIDIA_MODEL = process.env.NVIDIA_MODEL || "nvidia/nemotron-3-ultra-550b-a55b";
 
 const SYSTEM_PROMPT = `You are a helpful, empathetic assistant designed to mimic Claude's conversational style.
 Your role is to act as a personal chatbot for teachers and students that:
@@ -80,9 +80,11 @@ app.post("/api/chat", requireAuth, async (req, res) => {
         model: NVIDIA_MODEL,
         messages,
         temperature: 1,
-        top_p: 1,
-        max_tokens: 2048,
+        top_p: 0.95,
+        max_tokens: 16384,
         stream: false,
+        chat_template_kwargs: { enable_thinking: true },
+        reasoning_budget: 16384,
       }),
     });
 
@@ -93,7 +95,11 @@ app.post("/api/chat", requireAuth, async (req, res) => {
     }
 
     const data = await nvidiaRes.json();
-    const reply = data?.choices?.[0]?.message?.content?.trim() || "(no response)";
+    const message = data?.choices?.[0]?.message;
+    let reply = message?.content?.trim() || "(no response)";
+    if (message?.reasoning_content) {
+      reply = `[Reasoning]\n${message.reasoning_content.trim()}\n\n[Answer]\n${reply}`;
+    }
     res.json({ reply });
   } catch (err) {
     console.error("Server error:", err);

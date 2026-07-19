@@ -104,6 +104,7 @@ app.post("/api/chat", requireAuth, async (req, res) => {
 
   let upstream;
   try {
+    console.log(`[${req.uid}] Calling NVIDIA API with model ${NVIDIA_MODEL}...`);
     upstream = await fetch(NVIDIA_API_URL, {
       method: "POST",
       headers: {
@@ -120,6 +121,7 @@ app.post("/api/chat", requireAuth, async (req, res) => {
         stream: true,
       }),
     });
+    console.log(`[${req.uid}] NVIDIA responded with status ${upstream.status}`);
   } catch (err) {
     console.error("NVIDIA request failed:", err);
     send({ type: "error", message: "Could not reach the model." });
@@ -137,11 +139,14 @@ app.post("/api/chat", requireAuth, async (req, res) => {
   const reader = upstream.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let chunkCount = 0;
+  let contentCharsSent = 0;
 
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      chunkCount++;
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split("\n");
@@ -163,12 +168,14 @@ app.post("/api/chat", requireAuth, async (req, res) => {
           }
           if (delta.content) {
             send({ type: "content", text: delta.content });
+            contentCharsSent += delta.content.length;
           }
         } catch (parseErr) {
           // Ignore malformed/incomplete JSON chunks
         }
       }
     }
+    console.log(`[${req.uid}] Stream finished: ${chunkCount} raw chunks, ${contentCharsSent} content chars sent.`);
   } catch (err) {
     console.error("Stream read error:", err);
     send({ type: "error", message: "Stream interrupted." });

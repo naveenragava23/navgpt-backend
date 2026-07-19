@@ -1,68 +1,117 @@
-# NavGPT — Ask Naveen
+NavGPT — Ask Naveen
 
-A Claude-style personal study assistant, backed by GLM 5.2 (via NVIDIA
-Build), hosted on Firebase Hosting (free Spark plan) with Google login and
-saved conversation history per user. The model call runs on a small backend
-on Render, since Firebase Cloud Functions requires the paid Blaze plan even
-at low volume.
+A Claude-style personal study assistant with:
 
-## ⚠️ Before anything else
-An earlier version of this project had a live NVIDIA API key committed in
-plain text. **Regenerate that key now** at https://build.nvidia.com if you
-haven't already, and never paste API keys into frontend code, chat, or a
-file that gets committed to git — only into Render's environment variables.
 
-## Architecture
-- **Frontend** (`index.html`) — Google sign-in, chat UI, loads past messages
-  from Firestore on login. Deployed on **Firebase Hosting** (Spark/free).
-- **Backend** (`render-backend/`) — a small Express server deployed on
-  **Render**. Verifies the caller is a real signed-in Firebase user, then
-  calls GLM 5.2 on NVIDIA Build with your secret key. The key never touches
-  the browser.
-- **Firestore** (Spark/free) — stores each exchange under
-  `users/{uid}/conversations`, written directly from the frontend after a
-  successful reply, governed by `firestore.rules` so users can only read/
-  write their own data.
+Google sign-in and per-user chat sessions (sidebar, like ChatGPT)
+A choice of up to 3 OpenRouter models, selectable per message
+A RAG pipeline that retrieves relevant study material before answering
+(currently empty — see "Adding study material" below)
+Streaming responses over Server-Sent Events
 
-## 1. Deploy the backend on Render
-1. Push the `render-backend/` folder to a GitHub repo (or point Render at a
-   subfolder of an existing repo).
-2. On Render: **New → Web Service** → connect the repo →
-   Build command `npm install` → Start command `npm start`.
-3. Add environment variables (see `render-backend/.env.example`):
-   - `FIREBASE_SERVICE_ACCOUNT` — full JSON from Firebase Console → Project
-     Settings → Service Accounts → Generate new private key, pasted as one
-     line.
-   - `NVIDIA_API_KEY` — your **new**, regenerated key.
-   - `NVIDIA_MODEL` — optional, defaults to `z-ai/glm-5.2`.
-4. Deploy and copy the live URL, e.g. `https://navgpt-backend.onrender.com`.
 
-Note: Render's free tier spins down after inactivity — the first message
-after a while can take 30–50 seconds while it wakes up.
+Hosted on Firebase Hosting (free Spark plan) + Firestore, with the model
+calls proxied through a small backend on Render (Cloud Functions requires
+the paid Blaze plan even at low volume, so this avoids that).
 
-## 2. Point the frontend at your backend
-In `index.html`, replace the `BACKEND_URL` placeholder with your real
-Render URL.
+⚠️ Before anything else
 
-## 3. Enable Google Sign-In
-Firebase Console → Authentication → Sign-in method → enable **Google**.
+Multiple API keys and a Firebase service account key have been pasted into
+chat during development. Regenerate every one of them if you haven't
+already:
 
-## 4. Deploy Hosting + Firestore rules
-```bash
-npm install -g firebase-tools
-firebase login
-firebase deploy --only hosting,firestore:rules
-```
 
-## 5. Test
-Visit `https://naveen-gpt.web.app`, sign in with Google, and chat. Sign out
-and back in (or on another device) — your history reloads from Firestore
-automatically.
+NVIDIA keys: https://build.nvidia.com
+OpenRouter keys: https://openrouter.ai/keys
+Firebase service account: Firebase Console → Project Settings → Service
+Accounts → Generate new private key (delete the old one first at
+https://console.cloud.google.com/iam-admin/serviceaccounts)
 
-## Next steps
-- Add basic content-safety checks in the Render backend before returning a
-  reply.
-- Add a "New conversation" button to segment history into sessions rather
-  than one long thread.
-- Restrict CORS on the Render backend to your exact Hosting origin instead
-  of allowing all origins, once you're ready to lock things down.
+
+Never paste API keys into frontend code, chat, or a file that gets
+committed to git — only into Render's environment variables.
+
+Architecture
+
+
+Frontend (index.html) — sign-in, sidebar of chat sessions, model
+picker, streaming chat UI. Deployed on Firebase Hosting.
+Backend (render-backend/) — Express server on Render. Verifies the
+caller is a signed-in Firebase user, retrieves relevant context from the
+RAG knowledge base, calls the selected OpenRouter model, and streams the
+reply back over SSE. Deployed on Render.
+Firestore — users/{uid}/chats/{chatId} holds session metadata
+(title, timestamps); users/{uid}/chats/{chatId}/messages/{id} holds the
+exchanges, written directly from the frontend after each reply.
+knowledge_base (backend-only, via Admin SDK) holds RAG chunks +
+embeddings.
+
+
+1. Deploy the backend on Render
+
+
+Push render-backend/ to a GitHub repo.
+Render → New → Web Service → connect the repo.
+
+Build command: npm install
+Start command: npm start
+Instance type: Free
+
+
+
+Add environment variables (see render-backend/.env.example):
+
+FIREBASE_SERVICE_ACCOUNT
+OPENROUTER_API_KEY_1 / OPENROUTER_MODEL_1 / OPENROUTER_LABEL_1
+OPENROUTER_API_KEY_2 / OPENROUTER_MODEL_2 / OPENROUTER_LABEL_2
+OPENROUTER_API_KEY_3 / OPENROUTER_MODEL_3 / OPENROUTER_LABEL_3
+Only slots with both a key and a model set will appear in the
+frontend's dropdown — leave any pair blank to only offer fewer models.
+OPENROUTER_EMBEDDING_API_KEY / OPENROUTER_EMBEDDING_MODEL (optional
+— defaults to slot 1's key and openai/text-embedding-3-small)
+
+
+
+Deploy, copy the live URL.
+
+
+Render's free tier spins down after ~15 minutes idle — the next request
+takes 30–50 seconds to wake it. That's the main source of "slow" responses;
+a paid Render instance removes it, or you can ping the URL periodically
+from an external uptime service to keep it warm.
+
+2. Point the frontend at your backend
+
+In index.html, set BACKEND_URL to your Render URL.
+
+3. Deploy Hosting + Firestore rules
+
+bashfirebase deploy --only hosting,firestore:rules
+
+Adding study material (RAG)
+
+The knowledge base starts empty, so retrieval is a no-op until you add
+content. To ingest text:
+
+bashcurl -X POST https://YOUR-RENDER-URL.onrender.com/api/ingest \
+  -H "Authorization: Bearer <a valid Firebase ID token>" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "...your study material...", "source": "Chapter 3 notes"}'
+
+It gets chunked (~800 chars, 100 char overlap), embedded, and stored in
+Firestore's knowledge_base collection — shared across all users for now.
+The next chat request will automatically pull in the most relevant chunks
+for the question being asked. A simple in-app upload UI (paste text or a
+PDF) is a natural next step if you want this reachable without curl — say
+the word and I'll build it.
+
+Next steps
+
+
+Add a frontend UI for /api/ingest (paste text or upload a file) instead
+of curl.
+Split the knowledge base per-user or per-course if a shared pool isn't
+what you want.
+Restrict CORS on the Render backend to your exact Hosting origin.
+Consider a paid Render instance (or a keep-alive ping) if cold-start
+latency becomes annoying.

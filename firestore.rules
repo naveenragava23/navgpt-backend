@@ -1,8 +1,23 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{userId}/conversations/{doc} {
+    match /users/{userId}/chats/{chatId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      match /messages/{messageId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // Legacy flat conversation history from the previous version, kept
+    // readable in case you still have old data here. Safe to remove once
+    // migrated.
+    match /users/{userId}/conversations/{conversationId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+
+    // knowledge_base is written only by the backend (via the Admin SDK,
+    // which bypasses these rules entirely) and is never read directly by
+    // the client, so no client access is granted here.
   }
 }

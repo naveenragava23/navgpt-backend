@@ -68,12 +68,34 @@ these:
    nothing else inside the block:
 {
   "title": "Short overall title",
+  "subtitle": "Optional one-line subtitle or tagline (omit if not useful)",
   "sections": [
-    { "heading": "Section or slide heading", "content": ["bullet or short paragraph", "another point"] }
+    { "heading": "Section or slide heading", "content": ["a fully-formed, informative point", "another detailed point"] }
   ]
 }
-Keep each content item short (under ~25 words) so it fits well on a slide
-or page. Use 3-8 sections for a presentation, more for a longer document.
+
+Go deep, not shallow — this becomes a real downloadable PPTX/DOCX/PDF, so
+sparse content looks obviously unfinished. Follow these rules:
+- Use 6-10 sections for a typical presentation or report; use more for
+  broad or advanced topics. Only use fewer if the topic is genuinely narrow.
+- Structure sections sensibly for the topic — e.g. an introduction/overview
+  section first, several substantive body sections (covering distinct
+  sub-topics, mechanisms, examples, comparisons, causes/effects, or
+  steps as relevant), and a summary/conclusion or key-takeaways section
+  last.
+- Each section needs 4-7 content items. Every item should be a complete,
+  specific, informative sentence or clause (roughly 12-30 words) — not a
+  telegraphic fragment. Include concrete details, examples, numbers, or
+  explanations wherever relevant instead of vague generalities.
+- Vary sentence structure across items so the deck/document doesn't read
+  like a repetitive list of the same phrasing.
+- If the user asks for a large number of slides/pages (e.g. 15-20+), keep
+  each content item on the shorter end of the range (12-18 words) so the
+  whole response fits comfortably — it is far more important that the
+  \`\`\`export-json code block is complete and properly closed with a
+  final \`\`\` than that every item is maximally long. A finished block
+  with slightly shorter bullets is always better than a longer block that
+  gets cut off before closing.
 Do not add this code block for normal conversational replies — only when
 the user is clearly asking for a generatable document.`;
 
@@ -426,7 +448,7 @@ async function runChat({ req, res, send, userMessage, history, slot }) {
         messages,
         temperature: 1,
         top_p: 1,
-        max_tokens: 4096,
+        max_tokens: 16000,
         stream: true,
       }),
     });

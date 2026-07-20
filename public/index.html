@@ -435,6 +435,29 @@
       border-color: var(--border);
     }
 
+    .export-footer-input {
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      padding: 7px 12px;
+      font-size: 0.8rem;
+      font-family: inherit;
+      color: var(--text);
+      background: transparent;
+      min-width: 180px;
+      flex: 1;
+    }
+
+    .export-footer-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      border-style: solid;
+      background: var(--bg);
+    }
+
+    .export-footer-input::placeholder {
+      color: var(--muted);
+    }
+
     .reasoning-block {
       margin-bottom: 8px;
       padding-bottom: 8px;
@@ -1059,9 +1082,6 @@
       let reasoningStarted = false;
       return {
         setQueueStatus(position, total, estimatedWaitSeconds) {
-          // Once real content or reasoning has started arriving, the job
-          // has left the queue — ignore any stale queued events that might
-          // still be in flight.
           if (rawText || reasoningStarted) return;
           queueDiv.style.display = "flex";
           const etaText =
@@ -1099,23 +1119,95 @@
 
     // ================= Document export (PPTX / DOCX / PDF, optional banner) =================
 
-    function parseExportBlock(fullText) {
-      const match = fullText.match(/```export-json\s*([\s\S]*?)```/);
-      if (!match) return { displayText: fullText, exportData: null };
-      let exportData = null;
-      try {
-        exportData = JSON.parse(match[1].trim());
-      } catch (err) {
-        console.error("Failed to parse export-json block:", err);
+    // Attempts to recover a valid JSON object from text that got cut off
+    // mid-structure (e.g. the model's response hit a token limit before
+    // finishing). Rolls back to the last complete element and closes any
+    // still-open brackets/strings.
+    function tryRepairTruncatedJson(text) {
+      try { return JSON.parse(text); } catch { }
+
+      let stack = [];
+      let inString = false;
+      let escape = false;
+      let lastSafeIndex = -1;
+
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (inString) {
+          if (escape) escape = false;
+          else if (ch === "\\") escape = true;
+          else if (ch === '"') inString = false;
+          continue;
+        }
+        if (ch === '"') { inString = true; continue; }
+        if (ch === "{" || ch === "[") { stack.push(ch); continue; }
+        if (ch === "}" || ch === "]") { stack.pop(); continue; }
+        if (ch === "," || ch === "}" || ch === "]") lastSafeIndex = i;
       }
-      const displayText = (fullText.slice(0, match.index) + fullText.slice(match.index + match[0].length)).trim();
-      return { displayText, exportData };
+
+      if (lastSafeIndex === -1) return null;
+      let truncated = text.slice(0, lastSafeIndex + 1).replace(/,\s*$/, "");
+
+      stack = [];
+      inString = false;
+      escape = false;
+      for (let i = 0; i < truncated.length; i++) {
+        const ch = truncated[i];
+        if (inString) {
+          if (escape) escape = false;
+          else if (ch === "\\") escape = true;
+          else if (ch === '"') inString = false;
+          continue;
+        }
+        if (ch === '"') { inString = true; continue; }
+        if (ch === "{" || ch === "[") stack.push(ch);
+        else if (ch === "}" || ch === "]") stack.pop();
+      }
+
+      let closer = "";
+      for (let i = stack.length - 1; i >= 0; i--) closer += stack[i] === "{" ? "}" : "]";
+
+      try {
+        return JSON.parse(truncated + closer);
+      } catch (err) {
+        console.error("JSON repair attempt failed:", err);
+        return null;
+      }
     }
 
-    // Clicking a format button downloads that file immediately — no forced
-    // prompts. The cover-image button is a separate, optional step: pick an
-    // image once and it's included in whichever format you download next
-    // (PDF/PPTX get it as a banner, DOCX gets it inline at the top).
+    function parseExportBlock(fullText) {
+      const startMarker = "```export-json";
+      const startIdx = fullText.indexOf(startMarker);
+      if (startIdx === -1) return { displayText: fullText, exportData: null };
+
+      let jsonChunk = fullText.slice(startIdx + startMarker.length);
+      const closeIdx = jsonChunk.indexOf("```");
+      const blockEndInFullText = closeIdx === -1
+        ? fullText.length
+        : startIdx + startMarker.length + closeIdx + 3;
+      if (closeIdx !== -1) jsonChunk = jsonChunk.slice(0, closeIdx);
+
+      let exportData = null;
+      let wasTruncated = closeIdx === -1;
+      try {
+        exportData = JSON.parse(jsonChunk.trim());
+      } catch {
+        exportData = tryRepairTruncatedJson(jsonChunk.trim());
+        wasTruncated = true;
+        if (exportData) {
+          console.warn("Recovered a truncated export-json block (response may have hit a length limit).");
+        } else {
+          console.error("Could not parse or repair export-json block.");
+        }
+      }
+      if (exportData && (!Array.isArray(exportData.sections) || exportData.sections.length === 0)) {
+        exportData = null; // not usable even if syntactically valid
+      }
+
+      const displayText = (fullText.slice(0, startIdx) + fullText.slice(blockEndInFullText)).trim();
+      return { displayText, exportData, wasTruncated: wasTruncated && !!exportData };
+    }
+
     function addExportBar(bubbleEl, data) {
       const bar = document.createElement("div");
       bar.className = "export-bar";
@@ -1145,6 +1237,13 @@
       });
       bar.appendChild(attachBtn);
 
+      const footerInput = document.createElement("input");
+      footerInput.type = "text";
+      footerInput.className = "export-footer-input";
+      footerInput.placeholder = "Footer text for every slide/page (optional)";
+      footerInput.maxLength = 80;
+      bar.appendChild(footerInput);
+
       [
         { format: "pptx", label: "⬇ PPTX", generate: generatePPTX },
         { format: "docx", label: "⬇ DOCX", generate: generateDOCX },
@@ -1159,7 +1258,7 @@
           btn.disabled = true;
           btn.textContent = "Generating…";
           try {
-            await generate(data, bannerDataUrl);
+            await generate(data, bannerDataUrl, footerInput.value.trim());
           } catch (err) {
             console.error("Export failed:", err);
             alert("Sorry, that export failed. Check the console for details.");
@@ -1175,8 +1274,6 @@
     }
 
     function downloadBlob(blob, filename) {
-      // Inside the Android app wrapper, browser-style anchor downloads don't
-      // reliably save blob: URLs — route through the native bridge instead.
       if (window.AndroidDownloader && window.AndroidDownloader.saveBase64File) {
         const reader = new FileReader();
         reader.onload = () => {
@@ -1208,90 +1305,246 @@
       return (title || "document").replace(/[^a-z0-9\-_ ]/gi, "").trim().slice(0, 60) || "document";
     }
 
-    async function generatePPTX(data, bannerDataUrl) {
+    async function generatePPTX(data, bannerDataUrl, footerText) {
       const pptx = new window.PptxGenJS();
-      const title = pptx.addSlide();
-      let titleY = 2.3;
-      if (bannerDataUrl) {
-        title.addImage({ data: bannerDataUrl, x: 0, y: 0, w: 10, h: 2.2 });
-      } else {
-        titleY = 2;
+      pptx.layout = "LAYOUT_WIDE"; // 13.33 x 7.5 in
+
+      const ACCENT = "D97757";
+      const ACCENT_DARK = "BF5E3F";
+      const TEXT = "2D2A26";
+      const MUTED = "83786C";
+      const CREAM = "FAF9F5";
+      const PAGE_W = 13.33, PAGE_H = 7.5;
+
+      function addFooter(slide, pageNum) {
+        if (footerText) {
+          slide.addText(footerText, {
+            x: 0.5, y: PAGE_H - 0.45, w: 8, h: 0.35, fontSize: 10, color: MUTED, fontFace: "Arial",
+          });
+        }
+        slide.addText(String(pageNum), {
+          x: PAGE_W - 1.1, y: PAGE_H - 0.45, w: 0.6, h: 0.35, fontSize: 10, color: MUTED, align: "right", fontFace: "Arial",
+        });
       }
-      title.addText(data.title || "Presentation", {
-        x: 0.5, y: titleY, w: 9, h: 1, fontSize: 32, bold: true, color: "BF5E3F", align: "center",
+
+      // ---- Title slide ----
+      const titleSlide = pptx.addSlide();
+      titleSlide.background = { color: ACCENT };
+      if (bannerDataUrl) {
+        titleSlide.addImage({ data: bannerDataUrl, x: 0, y: 0, w: PAGE_W, h: PAGE_H, sizing: { type: "cover", w: PAGE_W, h: PAGE_H } });
+        titleSlide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: PAGE_W, h: PAGE_H, fill: { color: "000000", transparency: 45 } });
+      }
+      titleSlide.addText(data.title || "Presentation", {
+        x: 0.9, y: 2.9, w: PAGE_W - 1.8, h: 1.5, fontSize: 40, bold: true, color: "FFFFFF", align: "center", fontFace: "Arial",
+      });
+      if (data.subtitle) {
+        titleSlide.addText(data.subtitle, {
+          x: 0.9, y: 4.35, w: PAGE_W - 1.8, h: 0.7, fontSize: 18, italic: true, color: "FFFFFF", align: "center", fontFace: "Arial",
+        });
+      }
+
+      // ---- Agenda slide ----
+      const sections = data.sections || [];
+      if (sections.length > 1) {
+        const agenda = pptx.addSlide();
+        agenda.background = { color: CREAM };
+        agenda.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: PAGE_W, h: 1.1, fill: { color: ACCENT } });
+        agenda.addText("Agenda", { x: 0.7, y: 0.15, w: 8, h: 0.8, fontSize: 28, bold: true, color: "FFFFFF", fontFace: "Arial", valign: "middle" });
+        const items = sections.map((s, i) => ({
+          text: `${i + 1}.  ${s.heading || ""}`,
+          options: { breakLine: true, paraSpaceAfter: 14, color: TEXT },
+        }));
+        agenda.addText(items, { x: 1, y: 1.8, w: PAGE_W - 2, h: 5, fontSize: 20, fontFace: "Arial" });
+        addFooter(agenda, 2);
+      }
+
+      // ---- Content slides ----
+      sections.forEach((sec, idx) => {
+        const slide = pptx.addSlide();
+        slide.background = { color: "FFFFFF" };
+        slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: PAGE_W, h: 1.1, fill: { color: ACCENT } });
+        slide.addText(sec.heading || `Section ${idx + 1}`, {
+          x: 0.7, y: 0.15, w: PAGE_W - 1.4, h: 0.8, fontSize: 26, bold: true, color: "FFFFFF", fontFace: "Arial", valign: "middle",
+        });
+
+        const bulletItems = (sec.content || []).map((c) => ({
+          text: c,
+          options: { bullet: { code: "25CF", indent: 20 }, color: TEXT, breakLine: true, paraSpaceAfter: 16 },
+        }));
+        slide.addText(bulletItems, {
+          x: 0.8, y: 1.55, w: PAGE_W - 1.6, h: 5.2, fontSize: 17, fontFace: "Arial", valign: "top", lineSpacingMultiple: 1.15,
+        });
+
+        addFooter(slide, idx + (sections.length > 1 ? 3 : 2));
       });
 
-      (data.sections || []).forEach((sec) => {
-        const slide = pptx.addSlide();
-        slide.addText(sec.heading || "", { x: 0.5, y: 0.4, w: 9, h: 0.8, fontSize: 24, bold: true, color: "BF5E3F" });
-        const bulletText = (sec.content || []).map((c) => ({ text: c, options: { bullet: true, breakLine: true, paraSpaceAfter: 8 } }));
-        slide.addText(bulletText, { x: 0.5, y: 1.3, w: 9, h: 4.8, fontSize: 16, color: "2D2A26" });
+      // ---- Closing slide ----
+      const closing = pptx.addSlide();
+      closing.background = { color: ACCENT_DARK };
+      closing.addText("Thank You", {
+        x: 0.9, y: 3.1, w: PAGE_W - 1.8, h: 1.2, fontSize: 38, bold: true, color: "FFFFFF", align: "center", fontFace: "Arial",
       });
 
       await pptx.write("blob").then((blob) => downloadBlob(blob, `${safeFilename(data.title)}.pptx`));
     }
 
-    async function generateDOCX(data, bannerDataUrl) {
-      const { Document, Packer, Paragraph, HeadingLevel, ImageRun } = window.docx;
+    async function generateDOCX(data, bannerDataUrl, footerText) {
+      const {
+        Document, Packer, Paragraph, HeadingLevel, ImageRun, TextRun,
+        AlignmentType, Header, Footer, PageNumber, BorderStyle,
+      } = window.docx;
       const children = [];
 
       if (bannerDataUrl) {
         const bytes = dataUrlToUint8Array(bannerDataUrl);
         children.push(new Paragraph({
-          children: [new ImageRun({ data: bytes, transformation: { width: 550, height: 160 } })],
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 300 },
+          children: [new ImageRun({ data: bytes, transformation: { width: 580, height: 210 } })],
         }));
       }
 
-      children.push(new Paragraph({ text: data.title || "Document", heading: HeadingLevel.TITLE }));
+      children.push(new Paragraph({
+        text: data.title || "Document",
+        heading: HeadingLevel.TITLE,
+        alignment: AlignmentType.CENTER,
+        spacing: { after: data.subtitle ? 80 : 240 },
+      }));
 
-      (data.sections || []).forEach((sec) => {
-        children.push(new Paragraph({ text: sec.heading || "", heading: HeadingLevel.HEADING_1 }));
+      if (data.subtitle) {
+        children.push(new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 240 },
+          children: [new TextRun({ text: data.subtitle, italics: true, color: "83786C", size: 24 })],
+        }));
+      }
+
+      children.push(new Paragraph({
+        border: { bottom: { color: "D97757", space: 1, style: BorderStyle.SINGLE, size: 8 } },
+        spacing: { after: 320 },
+      }));
+
+      (data.sections || []).forEach((sec, idx) => {
+        children.push(new Paragraph({
+          heading: HeadingLevel.HEADING_1,
+          spacing: { before: idx === 0 ? 0 : 320, after: 140 },
+          children: [new TextRun({ text: `${idx + 1}.  ${sec.heading || ""}`, color: "BF5E3F", bold: true })],
+        }));
         (sec.content || []).forEach((item) => {
-          children.push(new Paragraph({ text: item, bullet: { level: 0 } }));
+          children.push(new Paragraph({
+            text: item,
+            bullet: { level: 0 },
+            spacing: { after: 110 },
+          }));
         });
       });
 
-      const doc = new Document({ sections: [{ children }] });
+      const footerChildren = [
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          border: { top: { color: "EAE5DC", space: 4, style: BorderStyle.SINGLE, size: 4 } },
+          children: [
+            ...(footerText ? [new TextRun({ text: footerText + "   |   Page ", size: 18, color: "83786C" })] : [new TextRun({ text: "Page ", size: 18, color: "83786C" })]),
+            new TextRun({ children: [PageNumber.CURRENT], size: 18, color: "83786C" }),
+          ],
+        }),
+      ];
+
+      const doc = new Document({
+        sections: [{
+          headers: {
+            default: new Header({
+              children: [new Paragraph({
+                alignment: AlignmentType.RIGHT,
+                children: [new TextRun({ text: data.title || "", size: 16, color: "83786C" })],
+              })],
+            }),
+          },
+          footers: { default: new Footer({ children: footerChildren }) },
+          children,
+        }],
+      });
+
       const blob = await Packer.toBlob(doc);
       downloadBlob(blob, `${safeFilename(data.title)}.docx`);
     }
 
-    function generatePDF(data, bannerDataUrl) {
+    function generatePDF(data, bannerDataUrl, footerText) {
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF();
       const pageWidth = pdf.internal.pageSize.getWidth();
-      const marginX = 14;
-      let y = 15;
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const marginX = 16;
+      const ACCENT = [217, 119, 87];
+      const ACCENT_DARK = [191, 94, 63];
+      const TEXT = [45, 42, 38];
+      const MUTED = [131, 120, 108];
+
+      // ---- Header banner ----
+      pdf.setFillColor(...ACCENT);
+      pdf.rect(0, 0, pageWidth, data.subtitle ? 42 : 36, "F");
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFontSize(21);
+      pdf.setFont(undefined, "bold");
+      pdf.text(data.title || "Document", marginX, 22);
+      if (data.subtitle) {
+        pdf.setFontSize(11);
+        pdf.setFont(undefined, "italic");
+        pdf.text(data.subtitle, marginX, 32);
+      }
+
+      let y = (data.subtitle ? 42 : 36) + 12;
 
       if (bannerDataUrl) {
         const props = pdf.getImageProperties(bannerDataUrl);
         const imgWidth = pageWidth - marginX * 2;
         const imgHeight = (props.height * imgWidth) / props.width;
         const format = bannerDataUrl.includes("image/png") ? "PNG" : "JPEG";
+        if (y + imgHeight > pageHeight - 30) { pdf.addPage(); y = 20; }
         pdf.addImage(bannerDataUrl, format, marginX, y, imgWidth, imgHeight);
-        y += imgHeight + 10;
+        y += imgHeight + 12;
       }
 
-      pdf.setFontSize(20);
-      pdf.text(data.title || "Document", marginX, y);
-      y += 12;
+      (data.sections || []).forEach((sec, idx) => {
+        if (y > pageHeight - 45) { pdf.addPage(); y = 20; }
 
-      (data.sections || []).forEach((sec) => {
-        if (y > 270) { pdf.addPage(); y = 15; }
-        pdf.setFontSize(14);
-        pdf.text(sec.heading || "", marginX, y);
-        y += 8;
+        pdf.setFontSize(15);
+        pdf.setFont(undefined, "bold");
+        pdf.setTextColor(...ACCENT_DARK);
+        pdf.text(`${idx + 1}.  ${sec.heading || ""}`, marginX, y);
+        y += 5;
+        pdf.setDrawColor(...ACCENT);
+        pdf.setLineWidth(0.7);
+        pdf.line(marginX, y, marginX + 34, y);
+        y += 9;
+
         pdf.setFontSize(11);
+        pdf.setFont(undefined, "normal");
+        pdf.setTextColor(...TEXT);
+
         (sec.content || []).forEach((item) => {
-          const lines = pdf.splitTextToSize(`•  ${item}`, pageWidth - marginX * 2 - 4);
-          lines.forEach((line) => {
-            if (y > 280) { pdf.addPage(); y = 15; }
-            pdf.text(line, marginX + 4, y);
-            y += 6;
-          });
+          const lines = pdf.splitTextToSize(item, pageWidth - marginX * 2 - 8);
+          if (y + lines.length * 6 > pageHeight - 30) { pdf.addPage(); y = 20; }
+          pdf.setFillColor(...ACCENT);
+          pdf.circle(marginX + 1.4, y - 1.6, 1.1, "F");
+          lines.forEach((line, i) => pdf.text(line, marginX + 6, y + i * 6));
+          y += lines.length * 6 + 5;
         });
-        y += 4;
+        y += 6;
       });
+
+      const totalPages = pdf.internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        pdf.setPage(i);
+        pdf.setDrawColor(...MUTED);
+        pdf.setLineWidth(0.2);
+        pdf.line(marginX, pageHeight - 14, pageWidth - marginX, pageHeight - 14);
+        pdf.setFontSize(8.5);
+        pdf.setFont(undefined, "normal");
+        pdf.setTextColor(...MUTED);
+        if (footerText) pdf.text(footerText, marginX, pageHeight - 8);
+        pdf.text(`Page ${i} of ${totalPages}`, pageWidth - marginX, pageHeight - 8, { align: "right" });
+      }
 
       downloadBlob(pdf.output("blob"), `${safeFilename(data.title)}.pdf`);
     }
@@ -1463,8 +1716,6 @@
 
           for (const line of lines) {
             const trimmed = line.trim();
-            // Lines starting with ":" are SSE keep-alive comments (sent
-            // while a request is queued or streaming) — no data to parse.
             if (!trimmed.startsWith("data:")) continue;
             const data = trimmed.slice(5).trim();
             if (!data) continue;
@@ -1487,9 +1738,13 @@
           }
         }
 
-        const { displayText, exportData } = parseExportBlock(fullReply);
+        const { displayText, exportData, wasTruncated } = parseExportBlock(fullReply);
         if (exportData) {
-          stream.contentEl.innerHTML = renderMarkdown(displayText || "Here's what I put together:");
+          let noteHtml = "";
+          if (wasTruncated) {
+            noteHtml = `<p style="color:var(--muted);font-size:0.82rem;font-style:italic;margin-top:8px;">⚠ The response was cut short, so this file may have fewer slides/sections than you asked for. Try asking for a shorter deck, or send the message again.</p>`;
+          }
+          stream.contentEl.innerHTML = renderMarkdown(displayText || "Here's what I put together:") + noteHtml;
           addExportBar(stream.bubbleEl, exportData);
         }
         const cleanReply = exportData ? displayText : fullReply;
@@ -1504,7 +1759,6 @@
           createdAt: serverTimestamp(),
         });
 
-        // Update chat title from the first message, and bump updatedAt for sidebar ordering
         const isFirstMessage = history.length <= 2;
         await setDoc(
           chatRef,

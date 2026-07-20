@@ -418,6 +418,23 @@
       cursor: wait;
     }
 
+    .export-btn.attach-btn {
+      background: transparent;
+      color: var(--muted);
+      border: 1px dashed var(--border);
+    }
+
+    .export-btn.attach-btn:hover {
+      background: var(--border-soft);
+      color: var(--text);
+    }
+
+    .export-btn.attach-btn.has-image {
+      color: var(--accent-dark);
+      border-style: solid;
+      border-color: var(--border);
+    }
+
     .reasoning-block {
       margin-bottom: 8px;
       padding-bottom: 8px;
@@ -613,6 +630,29 @@
         transform: translateY(-4px);
         opacity: 1;
       }
+    }
+
+    /* Queue status shown inside a bot bubble while a message waits its turn */
+    .queue-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .queue-status .queue-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+      animation: bounce 1.2s infinite ease-in-out;
+    }
+
+    .queue-status strong {
+      color: var(--text);
+      font-weight: 600;
     }
 
     #signedOutNotice {
@@ -827,7 +867,8 @@
         animation: none;
       }
 
-      .typing-dots span {
+      .typing-dots span,
+      .queue-status .queue-dot {
         animation: none;
         opacity: 0.6;
       }
@@ -868,7 +909,6 @@
       <textarea id="messageInput" rows="1" placeholder="Ask Naveen anything..."></textarea>
       <button id="sendBtn">Send</button>
     </div>
-    <input type="file" id="bannerFileInput" accept="image/*" style="display:none;" />
   </div>
 
   <!-- Firebase SDKs -->
@@ -911,7 +951,6 @@
     const inputBar = document.getElementById("inputBar");
     const messageInput = document.getElementById("messageInput");
     const sendBtn = document.getElementById("sendBtn");
-    const bannerFileInput = document.getElementById("bannerFileInput");
     const sidebar = document.getElementById("sidebar");
     const sidebarOverlay = document.getElementById("sidebarOverlay");
     const menuBtn = document.getElementById("menuBtn");
@@ -996,6 +1035,9 @@
       avatar.innerHTML = iconImg(true);
       const bubble = document.createElement("div");
       bubble.className = "bubble";
+      const queueDiv = document.createElement("div");
+      queueDiv.className = "queue-status";
+      queueDiv.style.display = "none";
       const reasoningDiv = document.createElement("div");
       reasoningDiv.className = "reasoning-block";
       reasoningDiv.style.display = "none";
@@ -1004,6 +1046,7 @@
       contentDiv.className = "content-text";
       const cursor = document.createElement("span");
       cursor.className = "stream-cursor";
+      bubble.appendChild(queueDiv);
       bubble.appendChild(reasoningDiv);
       bubble.appendChild(contentDiv);
       bubble.appendChild(cursor);
@@ -1013,18 +1056,38 @@
       chatWindow.scrollTop = chatWindow.scrollHeight;
 
       let rawText = "";
+      let reasoningStarted = false;
       return {
+        setQueueStatus(position, total, estimatedWaitSeconds) {
+          // Once real content or reasoning has started arriving, the job
+          // has left the queue — ignore any stale queued events that might
+          // still be in flight.
+          if (rawText || reasoningStarted) return;
+          queueDiv.style.display = "flex";
+          const etaText =
+            typeof estimatedWaitSeconds === "number" && estimatedWaitSeconds > 0
+              ? ` (~${estimatedWaitSeconds}s)`
+              : "";
+          queueDiv.innerHTML = position <= 1
+            ? `<span class="queue-dot"></span> Starting…`
+            : `<span class="queue-dot"></span> You're <strong>#${position}</strong> in line${etaText} — hang tight…`;
+          chatWindow.scrollTop = chatWindow.scrollHeight;
+        },
         appendReasoning(text) {
+          reasoningStarted = true;
+          queueDiv.style.display = "none";
           reasoningDiv.style.display = "block";
           reasoningDiv.querySelector(".reasoning-text").textContent += text;
           chatWindow.scrollTop = chatWindow.scrollHeight;
         },
         appendContent(text) {
+          queueDiv.style.display = "none";
           rawText += text;
           contentDiv.innerHTML = renderMarkdown(rawText);
           chatWindow.scrollTop = chatWindow.scrollHeight;
         },
         finish() {
+          queueDiv.style.display = "none";
           cursor.remove();
           const img = avatar.querySelector("img");
           if (img) img.classList.remove("icon-spin");
@@ -1034,10 +1097,7 @@
       };
     }
 
-    // ================= Document export (PPTX / DOCX / PDF with banner) =================
-
-    let pendingExportData = null;
-    let pendingExportFormat = null;
+    // ================= Document export (PPTX / DOCX / PDF, optional banner) =================
 
     function parseExportBlock(fullText) {
       const match = fullText.match(/```export-json\s*([\s\S]*?)```/);
@@ -1052,25 +1112,65 @@
       return { displayText, exportData };
     }
 
+    // Clicking a format button downloads that file immediately — no forced
+    // prompts. The cover-image button is a separate, optional step: pick an
+    // image once and it's included in whichever format you download next
+    // (PDF/PPTX get it as a banner, DOCX gets it inline at the top).
     function addExportBar(bubbleEl, data) {
       const bar = document.createElement("div");
       bar.className = "export-bar";
+
+      let bannerDataUrl = null;
+
+      const attachBtn = document.createElement("button");
+      attachBtn.type = "button";
+      attachBtn.className = "export-btn attach-btn";
+      attachBtn.textContent = "📎 Add cover image (optional)";
+      attachBtn.addEventListener("click", () => {
+        const picker = document.createElement("input");
+        picker.type = "file";
+        picker.accept = "image/*";
+        picker.addEventListener("change", () => {
+          const file = picker.files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            bannerDataUrl = reader.result;
+            attachBtn.textContent = "✓ Cover image added";
+            attachBtn.classList.add("has-image");
+          };
+          reader.readAsDataURL(file);
+        });
+        picker.click();
+      });
+      bar.appendChild(attachBtn);
+
       [
-        { format: "pptx", label: "⬇ PPTX" },
-        { format: "docx", label: "⬇ DOCX" },
-        { format: "pdf", label: "⬇ PDF" },
-      ].forEach(({ format, label }) => {
+        { format: "pptx", label: "⬇ PPTX", generate: generatePPTX },
+        { format: "docx", label: "⬇ DOCX", generate: generateDOCX },
+        { format: "pdf", label: "⬇ PDF", generate: generatePDF },
+      ].forEach(({ label, generate }) => {
         const btn = document.createElement("button");
+        btn.type = "button";
         btn.className = "export-btn";
         btn.textContent = label;
-        btn.addEventListener("click", () => {
-          pendingExportData = data;
-          pendingExportFormat = format;
-          bannerFileInput.value = "";
-          bannerFileInput.click();
+        const originalLabel = label;
+        btn.addEventListener("click", async () => {
+          btn.disabled = true;
+          btn.textContent = "Generating…";
+          try {
+            await generate(data, bannerDataUrl);
+          } catch (err) {
+            console.error("Export failed:", err);
+            alert("Sorry, that export failed. Check the console for details.");
+          } finally {
+            btn.disabled = false;
+            btn.textContent = originalLabel;
+          }
         });
         bar.appendChild(btn);
       });
+
       bubbleEl.appendChild(bar);
     }
 
@@ -1195,27 +1295,6 @@
 
       downloadBlob(pdf.output("blob"), `${safeFilename(data.title)}.pdf`);
     }
-
-    bannerFileInput.addEventListener("change", async () => {
-      const file = bannerFileInput.files?.[0];
-      if (!file || !pendingExportData || !pendingExportFormat) return;
-
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const bannerDataUrl = reader.result;
-        try {
-          if (pendingExportFormat === "pptx") await generatePPTX(pendingExportData, bannerDataUrl);
-          else if (pendingExportFormat === "docx") await generateDOCX(pendingExportData, bannerDataUrl);
-          else if (pendingExportFormat === "pdf") generatePDF(pendingExportData, bannerDataUrl);
-        } catch (err) {
-          console.error("Export failed:", err);
-          alert("Sorry, that export failed. Check the console for details.");
-        }
-        pendingExportData = null;
-        pendingExportFormat = null;
-      };
-      reader.readAsDataURL(file);
-    });
 
     messageInput.addEventListener("input", () => {
       messageInput.style.height = "auto";
@@ -1384,13 +1463,17 @@
 
           for (const line of lines) {
             const trimmed = line.trim();
+            // Lines starting with ":" are SSE keep-alive comments (sent
+            // while a request is queued or streaming) — no data to parse.
             if (!trimmed.startsWith("data:")) continue;
             const data = trimmed.slice(5).trim();
             if (!data) continue;
             let event;
             try { event = JSON.parse(data); } catch { continue; }
 
-            if (event.type === "reasoning") {
+            if (event.type === "queued") {
+              stream.setQueueStatus(event.position, event.total, event.estimatedWaitSeconds);
+            } else if (event.type === "reasoning") {
               stream.appendReasoning(event.text);
             } else if (event.type === "content") {
               stream.appendContent(event.text);

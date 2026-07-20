@@ -224,7 +224,120 @@ app.post("/api/ingest", requireAuth, async (req, res) => {
   }
 });
 
-// ================= Chat (streaming, model-selectable, RAG-augmented) =================
+// ================= Concurrency queue for OpenRouter calls =================
+//
+// Built for ~60 people potentially hitting /api/chat around the same time
+// (e.g. a class lab session), while OpenRouter (especially free-tier
+// models) can only reliably handle a handful of simultaneous requests
+// before rate-limiting. Extra requests wait in a FIFO queue instead of
+// erroring out, and each waiting client sees a live position + rough ETA
+// over the same SSE stream it already opened.
+//
+// This is a single-process, in-memory queue — correct as long as the
+// backend runs as one Render instance. If you ever scale to multiple
+// instances behind a load balancer, this would need to move to a shared
+// store (e.g. Redis) since each instance would otherwise track its own
+// queue independently.
+
+const MAX_CONCURRENT_REQUESTS = parseInt(process.env.MAX_CONCURRENT_REQUESTS || "3", 10);
+// Hard cap on how many people can be waiting at once. With 60 potential
+// users this should comfortably cover everyone; requests beyond this are
+// told to retry shortly rather than waiting indefinitely.
+const MAX_QUEUE_SIZE = parseInt(process.env.MAX_QUEUE_SIZE || "100", 10);
+// How often to send an SSE keep-alive comment to queued/streaming clients,
+// so intermediary proxies (Render's included) don't time out an idle
+// connection while someone waits their turn.
+const HEARTBEAT_MS = 15000;
+
+let activeRequests = 0;
+const waitQueue = []; // array of job objects, FIFO
+
+// Rolling average of recent job durations, used to give waiting users a
+// rough "~40s" estimate rather than just a raw position number.
+const recentDurations = [];
+const MAX_DURATION_SAMPLES = 20;
+const DEFAULT_DURATION_MS = 9000; // reasonable guess before we have samples
+
+function recordDuration(ms) {
+  recentDurations.push(ms);
+  if (recentDurations.length > MAX_DURATION_SAMPLES) recentDurations.shift();
+}
+
+function avgDurationMs() {
+  if (!recentDurations.length) return DEFAULT_DURATION_MS;
+  return recentDurations.reduce((a, b) => a + b, 0) / recentDurations.length;
+}
+
+// Roughly: how many "batches" of MAX_CONCURRENT_REQUESTS have to clear
+// before this position gets a free slot.
+function estimateWaitMs(position) {
+  const slotsAhead = Math.max(0, position - 1);
+  const batchesAhead = Math.ceil((slotsAhead + 1) / MAX_CONCURRENT_REQUESTS);
+  return Math.round(batchesAhead * avgDurationMs());
+}
+
+function broadcastQueuePositions() {
+  waitQueue.forEach((job, idx) => {
+    if (job.cancelled) return;
+    const position = idx + 1;
+    job.send({
+      type: "queued",
+      position,
+      total: waitQueue.length,
+      estimatedWaitSeconds: Math.round(estimateWaitMs(position) / 1000),
+    });
+  });
+}
+
+function runJob(job) {
+  activeRequests++;
+  broadcastQueuePositions();
+  const startedAt = Date.now();
+  job
+    .start()
+    .catch((err) => console.error("Unhandled error in queued job:", err))
+    .finally(() => {
+      recordDuration(Date.now() - startedAt);
+      activeRequests--;
+      processQueue();
+    });
+}
+
+function processQueue() {
+  while (activeRequests < MAX_CONCURRENT_REQUESTS && waitQueue.length > 0) {
+    const job = waitQueue.shift();
+    if (job.cancelled) continue; // client disconnected while waiting, skip
+    runJob(job);
+  }
+}
+
+function enqueue(job) {
+  if (activeRequests < MAX_CONCURRENT_REQUESTS) {
+    runJob(job);
+    return { accepted: true };
+  }
+  if (waitQueue.length >= MAX_QUEUE_SIZE) {
+    return { accepted: false };
+  }
+  waitQueue.push(job);
+  job.send({
+    type: "queued",
+    position: waitQueue.length,
+    total: waitQueue.length,
+    estimatedWaitSeconds: Math.round(estimateWaitMs(waitQueue.length) / 1000),
+  });
+  return { accepted: true };
+}
+
+function removeFromQueue(job) {
+  const idx = waitQueue.indexOf(job);
+  if (idx !== -1) {
+    waitQueue.splice(idx, 1);
+    broadcastQueuePositions();
+  }
+}
+
+// ================= Chat (streaming, model-selectable, RAG-augmented, queued) =================
 
 app.post("/api/chat", requireAuth, async (req, res) => {
   const userMessage = (req.body?.message || "").trim();
@@ -239,6 +352,50 @@ app.post("/api/chat", requireAuth, async (req, res) => {
     return res.status(500).json({ error: "No OpenRouter models are configured on the server." });
   }
 
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders?.();
+
+  const send = (payload) => {
+    if (!res.writableEnded) res.write(`data: ${JSON.stringify(payload)}\n\n`);
+  };
+
+  const heartbeat = setInterval(() => {
+    if (!res.writableEnded) res.write(": heartbeat\n\n");
+  }, HEARTBEAT_MS);
+
+  const job = {
+    cancelled: false,
+    send,
+    start: () => runChat({ req, res, send, userMessage, history, slot }),
+  };
+
+  req.on("close", () => {
+    if (!res.writableEnded) {
+      job.cancelled = true;
+      removeFromQueue(job);
+    }
+    clearInterval(heartbeat);
+  });
+
+  const originalStart = job.start;
+  job.start = () => originalStart().finally(() => clearInterval(heartbeat));
+
+  const result = enqueue(job);
+  if (!result.accepted) {
+    clearInterval(heartbeat);
+    send({
+      type: "error",
+      message: "The server is at capacity right now (too many people waiting). Please try again in a minute.",
+    });
+    res.end();
+  }
+});
+
+// The actual OpenRouter call + stream relay for a single job. Only ever
+// invoked by the queue once a concurrency slot is free.
+async function runChat({ req, res, send, userMessage, history, slot }) {
   // RAG retrieval — returns [] until documents are ingested, so this is a
   // no-op for now but wired up and ready.
   const contextChunks = await retrieveContext(userMessage);
@@ -254,13 +411,6 @@ app.post("/api/chat", requireAuth, async (req, res) => {
     })),
     { role: "user", content: userMessage },
   ];
-
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.flushHeaders?.();
-
-  const send = (payload) => res.write(`data: ${JSON.stringify(payload)}\n\n`);
 
   let upstream;
   try {
@@ -336,6 +486,16 @@ app.post("/api/chat", requireAuth, async (req, res) => {
 
   send({ type: "done" });
   res.end();
+}
+
+// ---------- Lightweight queue/capacity status (handy for a status widget) ----------
+app.get("/api/queue-status", requireAuth, (req, res) => {
+  res.json({
+    activeRequests,
+    waiting: waitQueue.length,
+    maxConcurrent: MAX_CONCURRENT_REQUESTS,
+    maxQueueSize: MAX_QUEUE_SIZE,
+  });
 });
 
 const PORT = process.env.PORT || 3000;

@@ -57,7 +57,25 @@ Your role is to act as a personal chatbot for teachers and students that:
 - Explains concepts step by step in a beginner-friendly way.
 - Avoids harmful, biased, or unsafe content.
 - Provides clear, concise answers but expands when asked for detail.
-Always respond in a way that feels supportive, thoughtful, and human-like.`;
+Always respond in a way that feels supportive, thoughtful, and human-like.
+
+When the user asks you to create a presentation, slide deck, PPT, Word
+document, DOCX, PDF, report, or similar downloadable document, do BOTH of
+these:
+1. Write a short, friendly reply as normal (1-3 sentences is fine).
+2. Immediately after, include a single fenced code block labeled
+   \`\`\`export-json containing ONLY valid JSON with this exact shape,
+   nothing else inside the block:
+{
+  "title": "Short overall title",
+  "sections": [
+    { "heading": "Section or slide heading", "content": ["bullet or short paragraph", "another point"] }
+  ]
+}
+Keep each content item short (under ~25 words) so it fits well on a slide
+or page. Use 3-8 sections for a presentation, more for a longer document.
+Do not add this code block for normal conversational replies — only when
+the user is clearly asking for a generatable document.`;
 
 // ---------- Auth middleware ----------
 async function requireAuth(req, res, next) {

@@ -6,6 +6,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#FAF9F5" />
   <title>NavGPT — Ask Naveen</title>
+  <link rel="icon" href="/icons/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <link rel="manifest" href="/manifest.json" />
   <style>
     :root {
       --bg: #FAF9F5;
@@ -189,13 +194,16 @@
       width: 32px;
       height: 32px;
       border-radius: 9px;
-      background: linear-gradient(135deg, var(--accent), var(--accent-dark));
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
+      overflow: hidden;
       flex-shrink: 0;
       box-shadow: 0 2px 6px rgba(191, 94, 63, 0.28);
+    }
+
+    .brand-mark img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
     }
 
     header h1 {
@@ -203,6 +211,20 @@
       margin: 0;
       font-weight: 600;
       letter-spacing: -0.01em;
+    }
+
+    @keyframes spin {
+      from {
+        transform: rotate(0deg);
+      }
+
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .icon-spin {
+      animation: spin 1.3s linear infinite;
     }
 
     #modelSelect {
@@ -329,11 +351,14 @@
       justify-content: center;
       font-size: 0.85rem;
       margin-bottom: 2px;
+      overflow: hidden;
     }
 
-    .msg.bot .avatar {
-      background: linear-gradient(135deg, var(--accent), var(--accent-dark));
-      color: white;
+    .avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
     }
 
     .bubble {
@@ -359,6 +384,40 @@
       border-bottom-left-radius: 4px;
     }
 
+    .export-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border);
+    }
+
+    .export-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--accent-light);
+      color: var(--accent-dark);
+      border: none;
+      border-radius: 8px;
+      padding: 7px 12px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s ease;
+    }
+
+    .export-btn:hover {
+      background: var(--border);
+    }
+
+    .export-btn:disabled {
+      opacity: 0.5;
+      cursor: wait;
+    }
+
     .reasoning-block {
       margin-bottom: 8px;
       padding-bottom: 8px;
@@ -368,6 +427,127 @@
       font-style: italic;
       line-height: 1.5;
       white-space: pre-wrap;
+    }
+
+    /* Rendered markdown inside bot replies */
+    .content-text {
+      white-space: normal;
+    }
+
+    .content-text>*:first-child {
+      margin-top: 0;
+    }
+
+    .content-text>*:last-child {
+      margin-bottom: 0;
+    }
+
+    .content-text p {
+      margin: 0 0 10px;
+    }
+
+    .content-text h1,
+    .content-text h2,
+    .content-text h3 {
+      margin: 16px 0 8px;
+      font-weight: 700;
+      line-height: 1.3;
+      color: var(--text);
+    }
+
+    .content-text h1 {
+      font-size: 1.25rem;
+    }
+
+    .content-text h2 {
+      font-size: 1.12rem;
+    }
+
+    .content-text h3 {
+      font-size: 1.02rem;
+    }
+
+    .content-text strong {
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .content-text em {
+      font-style: italic;
+    }
+
+    .content-text ul,
+    .content-text ol {
+      margin: 0 0 10px;
+      padding-left: 22px;
+    }
+
+    .content-text li {
+      margin-bottom: 4px;
+    }
+
+    .content-text li>p {
+      margin: 0;
+    }
+
+    .content-text a {
+      color: var(--accent-dark);
+      text-decoration: underline;
+    }
+
+    .content-text code {
+      background: var(--border-soft);
+      border-radius: 4px;
+      padding: 2px 5px;
+      font-size: 0.85em;
+      font-family: "SF Mono", Consolas, Monaco, monospace;
+    }
+
+    .content-text pre {
+      background: #2D2A26;
+      color: #FAF9F5;
+      border-radius: 8px;
+      padding: 12px 14px;
+      overflow-x: auto;
+      margin: 0 0 10px;
+      font-size: 0.85em;
+    }
+
+    .content-text pre code {
+      background: none;
+      padding: 0;
+      color: inherit;
+    }
+
+    .content-text blockquote {
+      border-left: 3px solid var(--accent);
+      margin: 0 0 10px;
+      padding: 2px 0 2px 12px;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .content-text hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 12px 0;
+    }
+
+    .content-text table {
+      border-collapse: collapse;
+      margin: 0 0 10px;
+      font-size: 0.9em;
+    }
+
+    .content-text th,
+    .content-text td {
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+    }
+
+    .content-text th {
+      background: var(--border-soft);
+      font-weight: 600;
     }
 
     .reasoning-label {
@@ -447,12 +627,15 @@
       width: 56px;
       height: 56px;
       border-radius: 16px;
-      background: var(--accent-light);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 26px;
+      overflow: hidden;
       margin: 0 auto 18px;
+    }
+
+    #signedOutNotice .empty-mark img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
     }
 
     #signedOutNotice h2 {
@@ -650,6 +833,13 @@
       }
     }
   </style>
+  <!-- Document export libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+  <script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <!-- Markdown rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.5/dist/purify.min.js"></script>
 </head>
 
 <body>
@@ -664,7 +854,7 @@
     <header>
       <div class="brand">
         <button id="menuBtn" aria-label="Toggle chat list">☰</button>
-        <div class="brand-mark">📚</div>
+        <div class="brand-mark" id="brandMark"><img src="/icons/icon-192.png" alt="NavGPT" /></div>
         <h1>NavGPT</h1>
       </div>
       <div class="header-right">
@@ -678,6 +868,7 @@
       <textarea id="messageInput" rows="1" placeholder="Ask Naveen anything..."></textarea>
       <button id="sendBtn">Send</button>
     </div>
+    <input type="file" id="bannerFileInput" accept="image/*" style="display:none;" />
   </div>
 
   <!-- Firebase SDKs -->
@@ -703,6 +894,14 @@
       appId: "1:1039081984469:web:00911e2678e60d3d1b6d5c"
     };
 
+    const ICON_SRC = "/icons/icon-192.png";
+    function iconImg(spin) {
+      return `<img src="${ICON_SRC}" alt="NavGPT" class="${spin ? "icon-spin" : ""}" />`;
+    }
+
+    document.getElementById("brandMark").innerHTML = iconImg(false);
+    marked.setOptions({ breaks: true, gfm: true });
+
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
@@ -712,6 +911,7 @@
     const inputBar = document.getElementById("inputBar");
     const messageInput = document.getElementById("messageInput");
     const sendBtn = document.getElementById("sendBtn");
+    const bannerFileInput = document.getElementById("bannerFileInput");
     const sidebar = document.getElementById("sidebar");
     const sidebarOverlay = document.getElementById("sidebarOverlay");
     const menuBtn = document.getElementById("menuBtn");
@@ -738,18 +938,30 @@
     sidebarOverlay.addEventListener("click", closeSidebar);
 
     // ---------- Message rendering ----------
+    function renderMarkdown(rawText) {
+      const html = marked.parse(rawText || "");
+      return DOMPurify.sanitize(html);
+    }
+
     function renderMessage(role, content) {
       const row = document.createElement("div");
       row.className = `msg ${role === "user" ? "user" : "bot"}`;
       if (role !== "user") {
         const avatar = document.createElement("div");
         avatar.className = "avatar";
-        avatar.textContent = "📚";
+        avatar.innerHTML = iconImg(false);
         row.appendChild(avatar);
       }
       const bubble = document.createElement("div");
       bubble.className = "bubble";
-      bubble.textContent = content;
+      if (role === "user") {
+        bubble.textContent = content;
+      } else {
+        const contentDiv = document.createElement("div");
+        contentDiv.className = "content-text";
+        contentDiv.innerHTML = renderMarkdown(content);
+        bubble.appendChild(contentDiv);
+      }
       row.appendChild(bubble);
       chatWindow.appendChild(row);
       chatWindow.scrollTop = chatWindow.scrollHeight;
@@ -762,7 +974,7 @@
       row.id = "typingRow";
       const avatar = document.createElement("div");
       avatar.className = "avatar";
-      avatar.textContent = "📚";
+      avatar.innerHTML = iconImg(true);
       const bubble = document.createElement("div");
       bubble.className = "bubble";
       bubble.innerHTML = `<div class="typing-dots"><span></span><span></span><span></span></div>`;
@@ -781,7 +993,7 @@
       row.className = "msg bot";
       const avatar = document.createElement("div");
       avatar.className = "avatar";
-      avatar.textContent = "📚";
+      avatar.innerHTML = iconImg(true);
       const bubble = document.createElement("div");
       bubble.className = "bubble";
       const reasoningDiv = document.createElement("div");
@@ -794,11 +1006,13 @@
       cursor.className = "stream-cursor";
       bubble.appendChild(reasoningDiv);
       bubble.appendChild(contentDiv);
-      contentDiv.appendChild(cursor);
+      bubble.appendChild(cursor);
       row.appendChild(avatar);
       row.appendChild(bubble);
       chatWindow.appendChild(row);
       chatWindow.scrollTop = chatWindow.scrollHeight;
+
+      let rawText = "";
       return {
         appendReasoning(text) {
           reasoningDiv.style.display = "block";
@@ -806,12 +1020,202 @@
           chatWindow.scrollTop = chatWindow.scrollHeight;
         },
         appendContent(text) {
-          contentDiv.insertBefore(document.createTextNode(text), cursor);
+          rawText += text;
+          contentDiv.innerHTML = renderMarkdown(rawText);
           chatWindow.scrollTop = chatWindow.scrollHeight;
         },
-        finish() { cursor.remove(); },
+        finish() {
+          cursor.remove();
+          const img = avatar.querySelector("img");
+          if (img) img.classList.remove("icon-spin");
+        },
+        bubbleEl: bubble,
+        contentEl: contentDiv,
       };
     }
+
+    // ================= Document export (PPTX / DOCX / PDF with banner) =================
+
+    let pendingExportData = null;
+    let pendingExportFormat = null;
+
+    function parseExportBlock(fullText) {
+      const match = fullText.match(/```export-json\s*([\s\S]*?)```/);
+      if (!match) return { displayText: fullText, exportData: null };
+      let exportData = null;
+      try {
+        exportData = JSON.parse(match[1].trim());
+      } catch (err) {
+        console.error("Failed to parse export-json block:", err);
+      }
+      const displayText = (fullText.slice(0, match.index) + fullText.slice(match.index + match[0].length)).trim();
+      return { displayText, exportData };
+    }
+
+    function addExportBar(bubbleEl, data) {
+      const bar = document.createElement("div");
+      bar.className = "export-bar";
+      [
+        { format: "pptx", label: "⬇ PPTX" },
+        { format: "docx", label: "⬇ DOCX" },
+        { format: "pdf", label: "⬇ PDF" },
+      ].forEach(({ format, label }) => {
+        const btn = document.createElement("button");
+        btn.className = "export-btn";
+        btn.textContent = label;
+        btn.addEventListener("click", () => {
+          pendingExportData = data;
+          pendingExportFormat = format;
+          bannerFileInput.value = "";
+          bannerFileInput.click();
+        });
+        bar.appendChild(btn);
+      });
+      bubbleEl.appendChild(bar);
+    }
+
+    function downloadBlob(blob, filename) {
+      // Inside the Android app wrapper, browser-style anchor downloads don't
+      // reliably save blob: URLs — route through the native bridge instead.
+      if (window.AndroidDownloader && window.AndroidDownloader.saveBase64File) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = reader.result.split(",")[1];
+          window.AndroidDownloader.saveBase64File(filename, base64, blob.type || "application/octet-stream");
+        };
+        reader.readAsDataURL(blob);
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function dataUrlToUint8Array(dataUrl) {
+      const base64 = dataUrl.split(",")[1];
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return bytes;
+    }
+
+    function safeFilename(title) {
+      return (title || "document").replace(/[^a-z0-9\-_ ]/gi, "").trim().slice(0, 60) || "document";
+    }
+
+    async function generatePPTX(data, bannerDataUrl) {
+      const pptx = new window.PptxGenJS();
+      const title = pptx.addSlide();
+      let titleY = 2.3;
+      if (bannerDataUrl) {
+        title.addImage({ data: bannerDataUrl, x: 0, y: 0, w: 10, h: 2.2 });
+      } else {
+        titleY = 2;
+      }
+      title.addText(data.title || "Presentation", {
+        x: 0.5, y: titleY, w: 9, h: 1, fontSize: 32, bold: true, color: "BF5E3F", align: "center",
+      });
+
+      (data.sections || []).forEach((sec) => {
+        const slide = pptx.addSlide();
+        slide.addText(sec.heading || "", { x: 0.5, y: 0.4, w: 9, h: 0.8, fontSize: 24, bold: true, color: "BF5E3F" });
+        const bulletText = (sec.content || []).map((c) => ({ text: c, options: { bullet: true, breakLine: true, paraSpaceAfter: 8 } }));
+        slide.addText(bulletText, { x: 0.5, y: 1.3, w: 9, h: 4.8, fontSize: 16, color: "2D2A26" });
+      });
+
+      await pptx.write("blob").then((blob) => downloadBlob(blob, `${safeFilename(data.title)}.pptx`));
+    }
+
+    async function generateDOCX(data, bannerDataUrl) {
+      const { Document, Packer, Paragraph, HeadingLevel, ImageRun } = window.docx;
+      const children = [];
+
+      if (bannerDataUrl) {
+        const bytes = dataUrlToUint8Array(bannerDataUrl);
+        children.push(new Paragraph({
+          children: [new ImageRun({ data: bytes, transformation: { width: 550, height: 160 } })],
+        }));
+      }
+
+      children.push(new Paragraph({ text: data.title || "Document", heading: HeadingLevel.TITLE }));
+
+      (data.sections || []).forEach((sec) => {
+        children.push(new Paragraph({ text: sec.heading || "", heading: HeadingLevel.HEADING_1 }));
+        (sec.content || []).forEach((item) => {
+          children.push(new Paragraph({ text: item, bullet: { level: 0 } }));
+        });
+      });
+
+      const doc = new Document({ sections: [{ children }] });
+      const blob = await Packer.toBlob(doc);
+      downloadBlob(blob, `${safeFilename(data.title)}.docx`);
+    }
+
+    function generatePDF(data, bannerDataUrl) {
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF();
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const marginX = 14;
+      let y = 15;
+
+      if (bannerDataUrl) {
+        const props = pdf.getImageProperties(bannerDataUrl);
+        const imgWidth = pageWidth - marginX * 2;
+        const imgHeight = (props.height * imgWidth) / props.width;
+        const format = bannerDataUrl.includes("image/png") ? "PNG" : "JPEG";
+        pdf.addImage(bannerDataUrl, format, marginX, y, imgWidth, imgHeight);
+        y += imgHeight + 10;
+      }
+
+      pdf.setFontSize(20);
+      pdf.text(data.title || "Document", marginX, y);
+      y += 12;
+
+      (data.sections || []).forEach((sec) => {
+        if (y > 270) { pdf.addPage(); y = 15; }
+        pdf.setFontSize(14);
+        pdf.text(sec.heading || "", marginX, y);
+        y += 8;
+        pdf.setFontSize(11);
+        (sec.content || []).forEach((item) => {
+          const lines = pdf.splitTextToSize(`•  ${item}`, pageWidth - marginX * 2 - 4);
+          lines.forEach((line) => {
+            if (y > 280) { pdf.addPage(); y = 15; }
+            pdf.text(line, marginX + 4, y);
+            y += 6;
+          });
+        });
+        y += 4;
+      });
+
+      downloadBlob(pdf.output("blob"), `${safeFilename(data.title)}.pdf`);
+    }
+
+    bannerFileInput.addEventListener("change", async () => {
+      const file = bannerFileInput.files?.[0];
+      if (!file || !pendingExportData || !pendingExportFormat) return;
+
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const bannerDataUrl = reader.result;
+        try {
+          if (pendingExportFormat === "pptx") await generatePPTX(pendingExportData, bannerDataUrl);
+          else if (pendingExportFormat === "docx") await generateDOCX(pendingExportData, bannerDataUrl);
+          else if (pendingExportFormat === "pdf") generatePDF(pendingExportData, bannerDataUrl);
+        } catch (err) {
+          console.error("Export failed:", err);
+          alert("Sorry, that export failed. Check the console for details.");
+        }
+        pendingExportData = null;
+        pendingExportFormat = null;
+      };
+      reader.readAsDataURL(file);
+    });
 
     messageInput.addEventListener("input", () => {
       messageInput.style.height = "auto";
@@ -930,10 +1334,11 @@
         modelSelect.innerHTML = "";
         chatWindow.innerHTML = `
         <div id="signedOutNotice">
-          <div class="empty-mark">📚</div>
+          <div class="empty-mark" id="emptyMark"></div>
           <h2>Welcome to NavGPT</h2>
           <p>Sign in to start chatting with Naveen — your conversation history is saved to your account.</p>
         </div>`;
+        document.getElementById("emptyMark").innerHTML = iconImg(false);
       }
     });
 
@@ -999,13 +1404,20 @@
           }
         }
 
+        const { displayText, exportData } = parseExportBlock(fullReply);
+        if (exportData) {
+          stream.contentEl.innerHTML = renderMarkdown(displayText || "Here's what I put together:");
+          addExportBar(stream.bubbleEl, exportData);
+        }
+        const cleanReply = exportData ? displayText : fullReply;
+
         history.push({ role: "user", content: text });
-        history.push({ role: "assistant", content: fullReply });
+        history.push({ role: "assistant", content: cleanReply });
 
         const chatRef = doc(db, "users", currentUser.uid, "chats", currentChatId);
         await addDoc(messagesCol(currentUser.uid, currentChatId), {
           userMessage: text,
-          reply: fullReply,
+          reply: cleanReply,
           createdAt: serverTimestamp(),
         });
 

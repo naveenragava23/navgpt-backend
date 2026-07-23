@@ -1,6 +1,6 @@
 {
   "projects": {
-    "prod": "naveen-gpt"
+    "default": "naveen-gpt"
   },
   "targets": {},
   "etags": {}

@@ -1,0 +1,12 @@
+{
+  "name": "coa-ppt-generator",
+  "version": "1.0.0",
+  "description": "PptxGenJS slide generator for COA lectures",
+  "main": "generate.js",
+  "scripts": {
+    "generate": "node generate.js"
+  },
+  "dependencies": {
+    "pptxgenjs": "^3.12.0"
+  }
+}

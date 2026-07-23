@@ -28,27 +28,51 @@ try {
   console.error("FIREBASE_SERVICE_ACCOUNT is missing or invalid JSON:", err.message);
 }
 
-// ---------- OpenRouter config: up to 3 selectable models, each with its own key ----------
-// Set these in Render's Environment tab. A model slot is only offered to the
-// frontend if both its API key and model id are set.
+// ---------- Provider configs ----------
+
+// OpenRouter — fallback provider for any non-NVIDIA slots.
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 const OPENROUTER_EMBEDDING_URL = "https://openrouter.ai/api/v1/embeddings";
 
-const MODEL_SLOTS = [1, 2, 3].map((n) => ({
-  id: `model${n}`,
-  apiKey: process.env[`OPENROUTER_API_KEY_${n}`],
-  model: process.env[`OPENROUTER_MODEL_${n}`],
-  label: process.env[`OPENROUTER_LABEL_${n}`] || process.env[`OPENROUTER_MODEL_${n}`] || `Model ${n}`,
-})).filter((m) => m.apiKey && m.model);
+// NVIDIA NIM — direct API for Nemotron (OpenAI-compatible endpoint).
+// Set NVIDIA_API_KEY + NVIDIA_MODEL in Render's Environment tab.
+const NVIDIA_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
+
+// Build a unified slot list. The NVIDIA slot (if configured) is listed first
+// so it becomes the default. Each slot carries a `provider` tag so runChat
+// knows which endpoint and extra params to use.
+const _nvidiaSlot =
+  process.env.NVIDIA_API_KEY && process.env.NVIDIA_MODEL
+    ? {
+        id: "nvidia",
+        provider: "nvidia",
+        apiKey: process.env.NVIDIA_API_KEY,
+        model: process.env.NVIDIA_MODEL,
+        label: process.env.NVIDIA_LABEL || "Nemotron Ultra",
+      }
+    : null;
+
+const _openrouterSlots = [1, 2]
+  .map((n) => ({
+    id: `model${n}`,
+    provider: "openrouter",
+    apiKey: process.env[`OPENROUTER_API_KEY_${n}`],
+    model: process.env[`OPENROUTER_MODEL_${n}`],
+    label:
+      process.env[`OPENROUTER_LABEL_${n}`] ||
+      process.env[`OPENROUTER_MODEL_${n}`] ||
+      `Model ${n}`,
+  }))
+  .filter((m) => m.apiKey && m.model);
+
+const MODEL_SLOTS = [...(_nvidiaSlot ? [_nvidiaSlot] : []), ..._openrouterSlots];
 
 function getModelSlot(modelId) {
   return MODEL_SLOTS.find((m) => m.id === modelId) || MODEL_SLOTS[0];
 }
 
-// Embeddings use whichever key is in slot 1 by default (OpenRouter routes
-// embedding models the same way as chat models). Override with a dedicated
-// key/model if you want retrieval to use a different provider.
-const EMBEDDING_API_KEY = process.env.OPENROUTER_EMBEDDING_API_KEY || MODEL_SLOTS[0]?.apiKey;
+// Embeddings use the OpenRouter embedding key/model (separate from chat slots).
+const EMBEDDING_API_KEY = process.env.OPENROUTER_EMBEDDING_API_KEY || _openrouterSlots[0]?.apiKey;
 const EMBEDDING_MODEL = process.env.OPENROUTER_EMBEDDING_MODEL || "openai/text-embedding-3-small";
 
 const SYSTEM_PROMPT = `You are a helpful, empathetic assistant designed to mimic Claude's conversational style.
@@ -246,14 +270,14 @@ app.post("/api/ingest", requireAuth, async (req, res) => {
   }
 });
 
-// ================= Concurrency queue for OpenRouter calls =================
+// ================= Concurrency queue for AI provider calls =================
 //
 // Built for ~60 people potentially hitting /api/chat around the same time
-// (e.g. a class lab session), while OpenRouter (especially free-tier
-// models) can only reliably handle a handful of simultaneous requests
-// before rate-limiting. Extra requests wait in a FIFO queue instead of
-// erroring out, and each waiting client sees a live position + rough ETA
-// over the same SSE stream it already opened.
+// (e.g. a class lab session). Both the NVIDIA NIM and OpenRouter providers
+// can only reliably handle a handful of simultaneous requests before
+// rate-limiting. Extra requests wait in a FIFO queue instead of erroring
+// out, and each waiting client sees a live position + rough ETA over the
+// same SSE stream it already opened.
 //
 // This is a single-process, in-memory queue — correct as long as the
 // backend runs as one Render instance. If you ever scale to multiple
@@ -371,7 +395,7 @@ app.post("/api/chat", requireAuth, async (req, res) => {
 
   const slot = getModelSlot(modelId);
   if (!slot) {
-    return res.status(500).json({ error: "No OpenRouter models are configured on the server." });
+    return res.status(500).json({ error: "No AI models are configured on the server." });
   }
 
   res.setHeader("Content-Type", "text/event-stream");
@@ -415,8 +439,11 @@ app.post("/api/chat", requireAuth, async (req, res) => {
   }
 });
 
-// The actual OpenRouter call + stream relay for a single job. Only ever
+// The actual provider call + stream relay for a single job. Only ever
 // invoked by the queue once a concurrency slot is free.
+// Supports two providers:
+//   - "nvidia"     → NVIDIA NIM endpoint (direct, with thinking params)
+//   - "openrouter" → OpenRouter endpoint (default)
 async function runChat({ req, res, send, userMessage, history, slot }) {
   // RAG retrieval — returns [] until documents are ingested, so this is a
   // no-op for now but wired up and ready.
@@ -434,38 +461,53 @@ async function runChat({ req, res, send, userMessage, history, slot }) {
     { role: "user", content: userMessage },
   ];
 
+  // ---- Build provider-specific request ----
+  const isNvidia = slot.provider === "nvidia";
+  const apiUrl = isNvidia ? NVIDIA_API_URL : OPENROUTER_API_URL;
+
+  const requestBody = {
+    model: slot.model,
+    messages,
+    temperature: 1,
+    top_p: isNvidia ? 0.95 : 1,
+    max_tokens: 16384,
+    stream: true,
+    // NVIDIA NIM extended thinking params (extra_body in the Python SDK
+    // maps to top-level fields in a raw HTTP POST body).
+    ...(isNvidia && {
+      chat_template_kwargs: { enable_thinking: true },
+      reasoning_budget: 16384,
+    }),
+  };
+
   let upstream;
   try {
-    console.log(`[${req.uid}] Calling OpenRouter with model ${slot.model} (slot ${slot.id})...`);
-    upstream = await fetch(OPENROUTER_API_URL, {
+    console.log(
+      `[${req.uid}] Calling ${isNvidia ? "NVIDIA NIM" : "OpenRouter"} with model ${slot.model} (slot ${slot.id})...`
+    );
+    upstream = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${slot.apiKey}`,
       },
-      body: JSON.stringify({
-        model: slot.model,
-        messages,
-        temperature: 1,
-        top_p: 1,
-        max_tokens: 16000,
-        stream: true,
-      }),
+      body: JSON.stringify(requestBody),
     });
-    console.log(`[${req.uid}] OpenRouter responded with status ${upstream.status}`);
+    console.log(`[${req.uid}] Provider responded with status ${upstream.status}`);
   } catch (err) {
-    console.error("OpenRouter request failed:", err);
+    console.error("Provider request failed:", err);
     send({ type: "error", message: "Could not reach the model." });
     return res.end();
   }
 
   if (!upstream.ok || !upstream.body) {
     const errText = await upstream.text().catch(() => "");
-    console.error("OpenRouter API error:", upstream.status, errText);
+    console.error("Provider API error:", upstream.status, errText);
     send({ type: "error", message: "Upstream model request failed." });
     return res.end();
   }
 
+  // ---- Stream relay — identical SSE format for both providers ----
   const reader = upstream.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -490,6 +532,8 @@ async function runChat({ req, res, send, userMessage, history, slot }) {
           const parsed = JSON.parse(data);
           const delta = parsed?.choices?.[0]?.delta;
           if (!delta) continue;
+          // reasoning_content is emitted by both NVIDIA NIM (thinking mode)
+          // and some OpenRouter models — handled the same way.
           if (delta.reasoning_content) send({ type: "reasoning", text: delta.reasoning_content });
           if (delta.content) {
             send({ type: "content", text: delta.content });

@@ -141,6 +141,30 @@
       color: var(--text);
     }
 
+    #loadMoreChatsBtn {
+      display: block;
+      width: 100%;
+      background: none;
+      border: 1px dashed var(--border);
+      color: var(--muted);
+      border-radius: var(--radius-sm);
+      padding: 8px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      margin-top: 6px;
+      font-family: inherit;
+    }
+
+    #loadMoreChatsBtn:hover {
+      background: var(--border-soft);
+      color: var(--text);
+    }
+
+    #loadMoreChatsBtn:disabled {
+      opacity: 0.5;
+      cursor: wait;
+    }
+
     #sidebarOverlay {
       display: none;
       position: fixed;
@@ -315,6 +339,29 @@
       margin: 0 auto;
       width: 100%;
       -webkit-overflow-scrolling: touch;
+    }
+
+    #loadMoreMessagesBtn {
+      display: block;
+      margin: 0 auto 16px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: var(--radius-sm);
+      padding: 8px 16px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    #loadMoreMessagesBtn:hover {
+      background: var(--border-soft);
+      color: var(--text);
+    }
+
+    #loadMoreMessagesBtn:disabled {
+      opacity: 0.5;
+      cursor: wait;
     }
 
     .msg {
@@ -897,13 +944,33 @@
       }
     }
   </style>
-  <!-- Document export libraries -->
-  <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
-  <script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <!--
+    Document export libraries.
+
+    SECURITY NOTE (see README / SECURITY.md): these are pinned to exact
+    versions, but do NOT yet have Subresource Integrity (SRI) hashes below.
+    Without SRI, a compromised CDN could serve altered JS to every user of
+    this authenticated app. Before shipping, generate real hashes for the
+    exact files this page loads and add them as `integrity="sha384-..."`,
+    e.g.:
+
+      curl -s https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js \
+        | openssl dgst -sha384 -binary | openssl base64 -A
+
+    Do this for each script below, then keep the hash pinned alongside the
+    version number so a future version bump can't silently drop it.
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js" crossorigin="anonymous"
+    referrerpolicy="no-referrer"></script>
+  <script src="https://unpkg.com/docx@8.5.0/build/index.js" crossorigin="anonymous"
+    referrerpolicy="no-referrer"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" crossorigin="anonymous"
+    referrerpolicy="no-referrer"></script>
   <!-- Markdown rendering -->
-  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.5/dist/purify.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" crossorigin="anonymous"
+    referrerpolicy="no-referrer"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.5/dist/purify.min.js" crossorigin="anonymous"
+    referrerpolicy="no-referrer"></script>
 </head>
 
 <body>
@@ -922,14 +989,14 @@
         <h1>NavGPT</h1>
       </div>
       <div class="header-right">
-        <select id="modelSelect"></select>
+        <select id="modelSelect" aria-label="Model"></select>
         <div id="authArea"></div>
       </div>
     </header>
 
-    <div id="chatWindow"></div>
+    <div id="chatWindow" aria-live="polite"></div>
     <div id="inputBar" style="display:none;">
-      <textarea id="messageInput" rows="1" placeholder="Ask Naveen anything..."></textarea>
+      <textarea id="messageInput" rows="1" placeholder="Ask Naveen anything..." aria-label="Message"></textarea>
       <button id="sendBtn">Send</button>
     </div>
   </div>
@@ -942,7 +1009,7 @@
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
     import {
       getFirestore, collection, query, orderBy, limit, getDocs, addDoc,
-      doc, setDoc, deleteDoc, serverTimestamp
+      doc, setDoc, deleteDoc, serverTimestamp, startAfter
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     // URL of your Render backend (see render-backend/index.js).
@@ -956,6 +1023,10 @@
       messagingSenderId: "1039081984469",
       appId: "1:1039081984469:web:00911e2678e60d3d1b6d5c"
     };
+
+    // Pagination page size for both the chat list and message history.
+    const CHATS_PAGE_SIZE = 30;
+    const MESSAGES_PAGE_SIZE = 40;
 
     const ICON_SRC = "/icons/icon-192.png";
     function iconImg(spin) {
@@ -985,6 +1056,18 @@
     let currentUser = null;
     let currentChatId = null;
     let selectedModelId = null;
+    let modelsLoaded = false;
+
+    // ---- In-flight request bookkeeping (fixes cross-chat race + allows cancel) ----
+    let activeController = null;   // AbortController for the in-flight /api/chat fetch
+    let activeRequestChatId = null; // which chat that fetch belongs to
+
+    // ---- Pagination cursors ----
+    let chatsLastDoc = null;
+    let chatsExhausted = false;
+    let messagesFirstDoc = null; // oldest loaded message doc, for "load older"
+    let messagesExhausted = false;
+    let loadMoreMessagesBtn = null;
 
     function initials(nameOrEmail) {
       if (!nameOrEmail) return "?";
@@ -1026,7 +1109,6 @@
       }
       row.appendChild(bubble);
       chatWindow.appendChild(row);
-      chatWindow.scrollTop = chatWindow.scrollHeight;
       return row;
     }
 
@@ -1112,6 +1194,9 @@
           const img = avatar.querySelector("img");
           if (img) img.classList.remove("icon-spin");
         },
+        remove() {
+          row.remove();
+        },
         bubbleEl: bubble,
         contentEl: contentDiv,
       };
@@ -1141,8 +1226,14 @@
         }
         if (ch === '"') { inString = true; continue; }
         if (ch === "{" || ch === "[") { stack.push(ch); continue; }
-        if (ch === "}" || ch === "]") { stack.pop(); continue; }
-        if (ch === "," || ch === "}" || ch === "]") lastSafeIndex = i;
+        if (ch === "}" || ch === "]") {
+          stack.pop();
+          // A "}" or "]" is itself a safe place to cut the string, as long
+          // as we're not currently inside a quoted string.
+          lastSafeIndex = i;
+          continue;
+        }
+        if (ch === ",") lastSafeIndex = i;
       }
 
       if (lastSafeIndex === -1) return null;
@@ -1164,35 +1255,157 @@
         else if (ch === "}" || ch === "]") stack.pop();
       }
 
+      // If the cut point somehow left us mid-string (rare, but possible if
+      // the stream died mid-word before we found a later safe point),
+      // close the string first so the JSON stays valid.
+      if (inString) truncated += '"';
+
       let closer = "";
       for (let i = stack.length - 1; i >= 0; i--) closer += stack[i] === "{" ? "}" : "]";
 
       try {
         return JSON.parse(truncated + closer);
       } catch (err) {
-        console.error("JSON repair attempt failed:", err);
+        console.error("JSON repair attempt failed:", err, "\nAttempted:", truncated + closer);
         return null;
       }
     }
 
+    // A bullet is "well-formed" if it reads like an actual finished thought,
+    // not a fragment left behind by a truncation cut or a bad sentence
+    // split. This is intentionally conservative — false negatives (dropping
+    // a slightly terse-but-valid bullet) are far less harmful than false
+    // positives (shipping a garbled line like "Binary–6G." into a deck).
+    //
+    // Heuristics, all must pass:
+    //  - at least 3 whitespace-separated words
+    //  - at least 12 characters of actual content
+    //  - ends with sentence-final punctuation, a closing bracket, or a
+    //    digit/unit (tables of numbers legitimately end without a period)
+    //  - doesn't end on a dangling connector word ("and", "the", "a", "of",
+    //    an em/en dash, ...) which is the classic truncation-cut signature
+    function isWellFormedBullet(str) {
+      if (typeof str !== "string") return false;
+      const trimmed = str.trim();
+      if (trimmed.length < 12) return false;
+
+      const words = trimmed.split(/\s+/).filter(Boolean);
+      if (words.length < 3) return false;
+
+      const lastWord = words[words.length - 1].toLowerCase().replace(/[.,;:!?)"'”’]+$/, "");
+      const danglingConnectors = new Set([
+        "a", "an", "the", "and", "or", "but", "of", "to", "in", "on", "for",
+        "with", "is", "are", "was", "were", "this", "that", "these", "those",
+        "binary", "decimal", "octal", "hexadecimal", // bare base name with no value after it is a truncation smell
+      ]);
+      if (danglingConnectors.has(lastWord)) return false;
+
+      // Trailing dash/en-dash/em-dash with nothing meaningful after it
+      // (e.g. "Binary–6G." slipping through would still fail the word-count
+      // check above in this exact case, but guard the general pattern too).
+      if (/[-–—]\s*$/.test(trimmed.replace(/[.!?]+$/, ""))) return false;
+
+      const endsOk = /[.!?)\u2019\u201d\d%]$/.test(trimmed) || /[a-zA-Z0-9]₀|₁|₂|₃|₄|₅|₆|₇|₈|₉$/.test(trimmed);
+      return endsOk || /[a-z0-9]$/i.test(trimmed);
+    }
+
+    // Drops any section object that doesn't look genuinely complete (missing
+    // heading, or content that isn't a non-empty array of well-formed
+    // strings). This matters most after a repair recovers a syntactically
+    // valid JSON blob that still has a half-finished last section/bullet.
+    function dropIncompleteSections(exportData) {
+      if (!exportData || !Array.isArray(exportData.sections)) return exportData;
+      const cleaned = exportData.sections
+        .map((s) => {
+          if (!s || typeof s.heading !== "string" || !s.heading.trim() || !Array.isArray(s.content)) {
+            return null;
+          }
+          // Filter out individual garbled/truncated bullets rather than
+          // rejecting the whole section for one bad line.
+          const goodContent = s.content.filter(
+            (c) => typeof c === "string" && c.trim().length > 0 && isWellFormedBullet(c)
+          );
+          if (goodContent.length === 0) return null;
+          return { ...s, content: goodContent };
+        })
+        .filter(Boolean);
+      return { ...exportData, sections: cleaned };
+    }
+
+    // Locates the model's structured export block regardless of exactly how
+    // it fenced it. Different models are inconsistent about this: some use
+    // the literal "```export-json" tag, others use a plain "```json" or
+    // "```" fence, and some (seen with Nemotron in testing) skip the fence
+    // altogether and just emit the raw JSON object inline. Missing this
+    // used to mean the whole reply — JSON included — fell through to the
+    // plain-text fallback, which dumped the raw JSON text onto a slide.
+    function findExportBlockBounds(fullText) {
+      // 1) Any fenced code block whose language tag looks JSON-ish
+      //    (export-json, json, JSON, ...) or has no tag at all.
+      const fenceRe = /```([a-zA-Z-]*)\n?/g;
+      let m;
+      while ((m = fenceRe.exec(fullText)) !== null) {
+        const tag = (m[1] || "").toLowerCase();
+        const contentStart = m.index + m[0].length;
+        const closeIdx = fullText.indexOf("```", contentStart);
+        const contentEnd = closeIdx === -1 ? fullText.length : closeIdx;
+        const inner = fullText.slice(contentStart, contentEnd).trim();
+        const looksJsonTag = tag === "" || tag.includes("json");
+        const looksJsonBody = inner.startsWith("{") && /"sections"\s*:/.test(inner);
+        if (looksJsonTag && looksJsonBody) {
+          return {
+            startIdx: m.index,
+            jsonChunk: inner,
+            blockEndInFullText: closeIdx === -1 ? fullText.length : closeIdx + 3,
+            wasTruncated: closeIdx === -1,
+          };
+        }
+      }
+
+      // 2) No fence at all — the model just wrote the JSON object inline.
+      //    Find the first "{" that plausibly starts the export object (has
+      //    a "sections" key somewhere after it) and balance braces/strings
+      //    to find where it ends.
+      const firstBrace = fullText.indexOf("{");
+      if (firstBrace !== -1 && /"sections"\s*:/.test(fullText.slice(firstBrace, firstBrace + 4000))) {
+        let depth = 0, inString = false, escape = false, endIdx = -1;
+        for (let i = firstBrace; i < fullText.length; i++) {
+          const ch = fullText[i];
+          if (inString) {
+            if (escape) escape = false;
+            else if (ch === "\\") escape = true;
+            else if (ch === '"') inString = false;
+            continue;
+          }
+          if (ch === '"') { inString = true; continue; }
+          if (ch === "{") depth++;
+          else if (ch === "}") { depth--; if (depth === 0) { endIdx = i + 1; break; } }
+        }
+        const jsonChunk = fullText.slice(firstBrace, endIdx === -1 ? fullText.length : endIdx);
+        if (jsonChunk.trim().startsWith("{")) {
+          return {
+            startIdx: firstBrace,
+            jsonChunk: jsonChunk.trim(),
+            blockEndInFullText: endIdx === -1 ? fullText.length : endIdx,
+            wasTruncated: endIdx === -1,
+          };
+        }
+      }
+
+      return null;
+    }
+
     function parseExportBlock(fullText) {
-      const startMarker = "```export-json";
-      const startIdx = fullText.indexOf(startMarker);
-      if (startIdx === -1) return { displayText: fullText, exportData: null };
+      const bounds = findExportBlockBounds(fullText);
+      if (!bounds) return { displayText: fullText, exportData: null };
 
-      let jsonChunk = fullText.slice(startIdx + startMarker.length);
-      const closeIdx = jsonChunk.indexOf("```");
-      const blockEndInFullText = closeIdx === -1
-        ? fullText.length
-        : startIdx + startMarker.length + closeIdx + 3;
-      if (closeIdx !== -1) jsonChunk = jsonChunk.slice(0, closeIdx);
-
+      const { startIdx, jsonChunk, blockEndInFullText } = bounds;
       let exportData = null;
-      let wasTruncated = closeIdx === -1;
+      let wasTruncated = bounds.wasTruncated;
       try {
-        exportData = JSON.parse(jsonChunk.trim());
+        exportData = JSON.parse(jsonChunk);
       } catch {
-        exportData = tryRepairTruncatedJson(jsonChunk.trim());
+        exportData = tryRepairTruncatedJson(jsonChunk);
         wasTruncated = true;
         if (exportData) {
           console.warn("Recovered a truncated export-json block (response may have hit a length limit).");
@@ -1200,12 +1413,105 @@
           console.error("Could not parse or repair export-json block.");
         }
       }
+
+      if (exportData) {
+        const originalCount = Array.isArray(exportData.sections)
+          ? exportData.sections.reduce((n, s) => n + (Array.isArray(s?.content) ? s.content.length : 0), 0)
+          : 0;
+        exportData = dropIncompleteSections(exportData);
+        const newCount = exportData.sections.reduce((n, s) => n + s.content.length, 0);
+        if (newCount !== originalCount) wasTruncated = true;
+      }
+
       if (exportData && (!Array.isArray(exportData.sections) || exportData.sections.length === 0)) {
         exportData = null; // not usable even if syntactically valid
       }
 
       const displayText = (fullText.slice(0, startIdx) + fullText.slice(blockEndInFullText)).trim();
       return { displayText, exportData, wasTruncated: wasTruncated && !!exportData };
+    }
+
+    // ---- Fallback: build export data from plain text when a model ignores
+    // the export-json instruction entirely (some models, e.g. Nemotron in
+    // testing, just answer normally instead of following that formatting
+    // rule). Rather than leaving the user with no downloadable file, we
+    // parse the model's own markdown reply into the same {title, sections}
+    // shape the real export-json block would have produced.
+
+    const DOC_REQUEST_REGEX = /\b(presentation|slide\s*deck|slides?|ppt|pptx|power\s*point|word\s*doc(?:ument)?|docx|pdf|report)\b/i;
+
+    function looksLikeDocumentRequest(text) {
+      return DOC_REQUEST_REGEX.test(text || "");
+    }
+
+    function buildFallbackExportData(userMessage, rawText) {
+      let tokens;
+      try {
+        tokens = marked.lexer(rawText || "");
+      } catch (err) {
+        console.error("Fallback export: failed to tokenize reply as markdown:", err);
+        return null;
+      }
+
+      const sections = [];
+      let current = null;
+
+      function pushContent(text) {
+        const trimmed = (text || "").replace(/\s+/g, " ").trim();
+        if (!trimmed) return;
+        if (!current) {
+          current = { heading: "Overview", content: [] };
+          sections.push(current);
+        }
+        // Break up long paragraphs so a single item doesn't dominate a slide/page.
+        // Split on sentence boundaries that are actually followed by a new
+        // sentence (capital letter or digit), not just any '.', '!', '?' —
+        // this avoids cutting abbreviations/decimals into fragments.
+        if (trimmed.length > 220) {
+          trimmed.split(/(?<=[.!?])\s+(?=[A-Z0-9])/).forEach((sentence) => {
+            const s = sentence.trim();
+            if (s && isWellFormedBullet(s)) current.content.push(s);
+          });
+        } else if (isWellFormedBullet(trimmed)) {
+          current.content.push(trimmed);
+        }
+      }
+
+      tokens.forEach((token) => {
+        if (token.type === "heading" && token.depth <= 3) {
+          const headingText = (token.text || "").replace(/\*\*/g, "").trim();
+          if (headingText) {
+            current = { heading: headingText, content: [] };
+            sections.push(current);
+          }
+        } else if (token.type === "list") {
+          (token.items || []).forEach((item) => pushContent(item.text));
+        } else if (token.type === "paragraph" || token.type === "text") {
+          pushContent(token.text);
+        } else if (token.type === "table" && Array.isArray(token.rows)) {
+          token.rows.forEach((row) => {
+            pushContent(row.map((cell) => cell.text).join(" — "));
+          });
+        }
+      });
+
+      const cleanedSections = sections
+        .map((s) => ({ heading: s.heading, content: (s.content || []).filter(Boolean) }))
+        .filter((s) => s.heading && s.content.length > 0);
+
+      if (!cleanedSections.length) return null;
+
+      const title = (userMessage || "Document")
+        .replace(/\b(create|generate|make|build|give\s*me|write)\b/gi, "")
+        .replace(DOC_REQUEST_REGEX, "")
+        .replace(/\b(a|an|the|for|about|on)\b/gi, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      return {
+        title: title ? title.charAt(0).toUpperCase() + title.slice(1) : "Document",
+        sections: cleanedSections,
+      };
     }
 
     function addExportBar(bubbleEl, data) {
@@ -1261,7 +1567,12 @@
             await generate(data, bannerDataUrl, footerInput.value.trim());
           } catch (err) {
             console.error("Export failed:", err);
-            alert("Sorry, that export failed. Check the console for details.");
+            // Surface the real message instead of hiding it behind "check the
+            // console" — most failures here are the CDN script for this format
+            // not having loaded (blocked by an ad-blocker / firewall / CSP),
+            // which throws "X is not defined" or "Cannot read properties of
+            // undefined" right away, before any file is built.
+            alert(`Export failed: ${err && err.message ? err.message : err}`);
           } finally {
             btn.disabled = false;
             btn.textContent = originalLabel;
@@ -1305,7 +1616,33 @@
       return (title || "document").replace(/[^a-z0-9\-_ ]/gi, "").trim().slice(0, 60) || "document";
     }
 
+    // Scales body-text font/spacing down as bullet volume grows so dense
+    // sections don't overflow their fixed-size box.
+    function fitBulletFontSize(items) {
+      const totalChars = (items || []).reduce((sum, c) => sum + (c ? c.length : 0), 0);
+      if (totalChars > 950) return { fontSize: 12, paraSpaceAfter: 8, lineSpacingMultiple: 1.05 };
+      if (totalChars > 750) return { fontSize: 13, paraSpaceAfter: 10, lineSpacingMultiple: 1.08 };
+      if (totalChars > 600) return { fontSize: 14, paraSpaceAfter: 12, lineSpacingMultiple: 1.1 };
+      if (totalChars > 450) return { fontSize: 15, paraSpaceAfter: 13, lineSpacingMultiple: 1.12 };
+      if (totalChars > 300) return { fontSize: 16, paraSpaceAfter: 14, lineSpacingMultiple: 1.13 };
+      return { fontSize: 17, paraSpaceAfter: 16, lineSpacingMultiple: 1.15 };
+    }
+
+    // FIX: the agenda slide used to hardcode fontSize:20 no matter how many
+    // items were in it, so a long agenda (15-20+ items, common for a
+    // thorough deck) ran off the bottom of the slide. This scales down the
+    // same way fitBulletFontSize does for content slides.
+    function fitAgendaFontSize(count) {
+      if (count > 16) return { fontSize: 13, paraSpaceAfter: 8 };
+      if (count > 12) return { fontSize: 15, paraSpaceAfter: 10 };
+      if (count > 8) return { fontSize: 18, paraSpaceAfter: 12 };
+      return { fontSize: 20, paraSpaceAfter: 14 };
+    }
+
     async function generatePPTX(data, bannerDataUrl, footerText) {
+      if (!window.PptxGenJS) {
+        throw new Error("pptxgenjs failed to load from the CDN (blocked by an ad-blocker, firewall, or CSP?). Reload the page and check the Network tab for cdn.jsdelivr.net.");
+      }
       const pptx = new window.PptxGenJS();
       pptx.layout = "LAYOUT_WIDE"; // 13.33 x 7.5 in
 
@@ -1313,7 +1650,6 @@
       const ACCENT_DARK = "BF5E3F";
       const TEXT = "2D2A26";
       const MUTED = "83786C";
-      const CREAM = "FAF9F5";
       const PAGE_W = 13.33, PAGE_H = 7.5;
 
       function addFooter(slide, pageNum) {
@@ -1331,30 +1667,60 @@
       const titleSlide = pptx.addSlide();
       titleSlide.background = { color: ACCENT };
       if (bannerDataUrl) {
-        titleSlide.addImage({ data: bannerDataUrl, x: 0, y: 0, w: PAGE_W, h: PAGE_H, sizing: { type: "cover", w: PAGE_W, h: PAGE_H } });
-        titleSlide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: PAGE_W, h: PAGE_H, fill: { color: "000000", transparency: 45 } });
-      }
-      titleSlide.addText(data.title || "Presentation", {
-        x: 0.9, y: 2.9, w: PAGE_W - 1.8, h: 1.5, fontSize: 40, bold: true, color: "FFFFFF", align: "center", fontFace: "Arial",
-      });
-      if (data.subtitle) {
-        titleSlide.addText(data.subtitle, {
-          x: 0.9, y: 4.35, w: PAGE_W - 1.8, h: 0.7, fontSize: 18, italic: true, color: "FFFFFF", align: "center", fontFace: "Arial",
+        const BANNER_H = 2.6; // a true banner strip, not most of the slide
+        titleSlide.addImage({ data: bannerDataUrl, x: 0, y: 0, w: PAGE_W, h: BANNER_H, sizing: { type: "cover", w: PAGE_W, h: BANNER_H } });
+        // Solid accent band below the image holds the title/subtitle, so
+        // text never sits on top of the photo.
+        titleSlide.addShape(pptx.ShapeType.rect, { x: 0, y: BANNER_H, w: PAGE_W, h: PAGE_H - BANNER_H, fill: { color: ACCENT } });
+        const remaining = PAGE_H - BANNER_H;
+        titleSlide.addText(data.title || "Presentation", {
+          x: 0.9, y: BANNER_H + remaining * 0.28, w: PAGE_W - 1.8, h: 1.15, fontSize: 34, bold: true, color: "FFFFFF", align: "center", fontFace: "Arial", valign: "top",
         });
+        if (data.subtitle) {
+          titleSlide.addText(data.subtitle, {
+            x: 0.9, y: BANNER_H + remaining * 0.28 + 1.2, w: PAGE_W - 1.8, h: 0.6, fontSize: 16, italic: true, color: "FFFFFF", align: "center", fontFace: "Arial",
+          });
+        }
+      } else {
+        titleSlide.addText(data.title || "Presentation", {
+          x: 0.9, y: 2.9, w: PAGE_W - 1.8, h: 1.5, fontSize: 40, bold: true, color: "FFFFFF", align: "center", fontFace: "Arial",
+        });
+        if (data.subtitle) {
+          titleSlide.addText(data.subtitle, {
+            x: 0.9, y: 4.35, w: PAGE_W - 1.8, h: 0.7, fontSize: 18, italic: true, color: "FFFFFF", align: "center", fontFace: "Arial",
+          });
+        }
       }
 
-      // ---- Agenda slide ----
+      // ---- Agenda slide (FIXED: scaled font + two columns for long agendas) ----
       const sections = data.sections || [];
       if (sections.length > 1) {
         const agenda = pptx.addSlide();
-        agenda.background = { color: CREAM };
+        agenda.background = { color: "FFFFFF" };
         agenda.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: PAGE_W, h: 1.1, fill: { color: ACCENT } });
         agenda.addText("Agenda", { x: 0.7, y: 0.15, w: 8, h: 0.8, fontSize: 28, bold: true, color: "FFFFFF", fontFace: "Arial", valign: "middle" });
-        const items = sections.map((s, i) => ({
-          text: `${i + 1}.  ${s.heading || ""}`,
-          options: { breakLine: true, paraSpaceAfter: 14, color: TEXT },
-        }));
-        agenda.addText(items, { x: 1, y: 1.8, w: PAGE_W - 2, h: 5, fontSize: 20, fontFace: "Arial" });
+
+        const { fontSize: agendaFontSize, paraSpaceAfter: agendaParaSpaceAfter } = fitAgendaFontSize(sections.length);
+        const useTwoColumns = sections.length > 12;
+
+        function agendaItems(list, offset) {
+          return list.map((s, i) => ({
+            text: `${i + 1 + offset}.  ${s.heading || ""}`,
+            options: { breakLine: true, paraSpaceAfter: agendaParaSpaceAfter, color: TEXT },
+          }));
+        }
+
+        if (useTwoColumns) {
+          const colGap = 0.5;
+          const colW = (PAGE_W - 1.4 - colGap) / 2;
+          const splitAt = Math.ceil(sections.length / 2);
+          const col1 = sections.slice(0, splitAt);
+          const col2 = sections.slice(splitAt);
+          agenda.addText(agendaItems(col1, 0), { x: 0.7, y: 1.5, w: colW, h: 5.6, fontSize: agendaFontSize, fontFace: "Arial", valign: "top" });
+          agenda.addText(agendaItems(col2, splitAt), { x: 0.7 + colW + colGap, y: 1.5, w: colW, h: 5.6, fontSize: agendaFontSize, fontFace: "Arial", valign: "top" });
+        } else {
+          agenda.addText(agendaItems(sections, 0), { x: 1, y: 1.5, w: PAGE_W - 2, h: 5.6, fontSize: agendaFontSize, fontFace: "Arial", valign: "top" });
+        }
         addFooter(agenda, 2);
       }
 
@@ -1362,17 +1728,21 @@
       sections.forEach((sec, idx) => {
         const slide = pptx.addSlide();
         slide.background = { color: "FFFFFF" };
-        slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: PAGE_W, h: 1.1, fill: { color: ACCENT } });
-        slide.addText(sec.heading || `Section ${idx + 1}`, {
-          x: 0.7, y: 0.15, w: PAGE_W - 1.4, h: 0.8, fontSize: 26, bold: true, color: "FFFFFF", fontFace: "Arial", valign: "middle",
+        const heading = sec.heading || `Section ${idx + 1}`;
+        const headingFontSize = heading.length > 45 ? 21 : 26; // shrink long headings so they don't wrap into the body area
+        slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: PAGE_W, h: 1.3, fill: { color: ACCENT } });
+        slide.addText(heading, {
+          x: 0.7, y: 0.12, w: PAGE_W - 1.4, h: 1.06, fontSize: headingFontSize, bold: true, color: "FFFFFF", fontFace: "Arial", valign: "middle",
         });
 
-        const bulletItems = (sec.content || []).map((c) => ({
+        const items = sec.content || [];
+        const { fontSize, paraSpaceAfter, lineSpacingMultiple } = fitBulletFontSize(items);
+        const bulletItems = items.map((c) => ({
           text: c,
-          options: { bullet: { code: "25CF", indent: 20 }, color: TEXT, breakLine: true, paraSpaceAfter: 16 },
+          options: { bullet: { code: "25CF", indent: 20 }, color: TEXT, breakLine: true, paraSpaceAfter },
         }));
         slide.addText(bulletItems, {
-          x: 0.8, y: 1.55, w: PAGE_W - 1.6, h: 5.2, fontSize: 17, fontFace: "Arial", valign: "top", lineSpacingMultiple: 1.15,
+          x: 0.8, y: 1.75, w: PAGE_W - 1.6, h: 4.85, fontSize, fontFace: "Arial", valign: "top", lineSpacingMultiple,
         });
 
         addFooter(slide, idx + (sections.length > 1 ? 3 : 2));
@@ -1389,6 +1759,9 @@
     }
 
     async function generateDOCX(data, bannerDataUrl, footerText) {
+      if (!window.docx) {
+        throw new Error("docx library failed to load from the CDN (blocked by an ad-blocker, firewall, or CSP?). Reload the page and check the Network tab for unpkg.com.");
+      }
       const {
         Document, Packer, Paragraph, HeadingLevel, ImageRun, TextRun,
         AlignmentType, Header, Footer, PageNumber, BorderStyle,
@@ -1397,10 +1770,21 @@
 
       if (bannerDataUrl) {
         const bytes = dataUrlToUint8Array(bannerDataUrl);
+        // Size from the image's real aspect ratio (capped) instead of a fixed
+        // 580x210, so a portrait photo isn't squashed/stretched into a wide box.
+        const dims = await new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+          img.onerror = () => resolve({ w: 580, h: 210 });
+          img.src = bannerDataUrl;
+        });
+        const maxW = 580, maxH = 260;
+        let w = maxW, h = (dims.h * maxW) / dims.w;
+        if (h > maxH) { h = maxH; w = (dims.w * maxH) / dims.h; }
         children.push(new Paragraph({
           alignment: AlignmentType.CENTER,
           spacing: { after: 300 },
-          children: [new ImageRun({ data: bytes, transformation: { width: 580, height: 210 } })],
+          children: [new ImageRun({ data: bytes, transformation: { width: Math.round(w), height: Math.round(h) } })],
         }));
       }
 
@@ -1470,6 +1854,9 @@
     }
 
     function generatePDF(data, bannerDataUrl, footerText) {
+      if (!window.jspdf || !window.jspdf.jsPDF) {
+        throw new Error("jsPDF failed to load from the CDN (blocked by an ad-blocker, firewall, or CSP?). Reload the page and check the Network tab for cdn.jsdelivr.net.");
+      }
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF();
       const pageWidth = pdf.internal.pageSize.getWidth();
@@ -1497,11 +1884,18 @@
 
       if (bannerDataUrl) {
         const props = pdf.getImageProperties(bannerDataUrl);
-        const imgWidth = pageWidth - marginX * 2;
-        const imgHeight = (props.height * imgWidth) / props.width;
+        const maxImgWidth = pageWidth - marginX * 2;
+        const maxImgHeight = 70; // cap so a portrait photo can't cover most of the first page
+        let imgWidth = maxImgWidth;
+        let imgHeight = (props.height * imgWidth) / props.width;
+        if (imgHeight > maxImgHeight) {
+          imgHeight = maxImgHeight;
+          imgWidth = (props.width * imgHeight) / props.height;
+        }
+        const imgX = marginX + (maxImgWidth - imgWidth) / 2; // center if width was capped
         const format = bannerDataUrl.includes("image/png") ? "PNG" : "JPEG";
         if (y + imgHeight > pageHeight - 30) { pdf.addPage(); y = 20; }
-        pdf.addImage(bannerDataUrl, format, marginX, y, imgWidth, imgHeight);
+        pdf.addImage(bannerDataUrl, format, imgX, y, imgWidth, imgHeight);
         y += imgHeight + 12;
       }
 
@@ -1556,6 +1950,7 @@
 
     // ---------- Model dropdown ----------
     async function loadModels() {
+      modelsLoaded = false;
       try {
         const idToken = await currentUser.getIdToken();
         const res = await fetch(`${BACKEND_URL}/api/models`, {
@@ -1569,10 +1964,16 @@
           opt.textContent = m.label;
           modelSelect.appendChild(opt);
         });
-        if (data.models && data.models.length) selectedModelId = data.models[0].id;
+        if (data.models && data.models.length) {
+          selectedModelId = data.models[0].id;
+          modelsLoaded = true;
+        } else {
+          selectedModelId = null;
+        }
       } catch (err) {
         console.error("Failed to load models:", err);
-        modelSelect.innerHTML = `<option>Default</option>`;
+        modelSelect.innerHTML = `<option value="">Default unavailable</option>`;
+        selectedModelId = null;
       }
     }
     modelSelect.addEventListener("change", () => { selectedModelId = modelSelect.value; });
@@ -1581,30 +1982,77 @@
     function chatsCol(uid) { return collection(db, "users", uid, "chats"); }
     function messagesCol(uid, chatId) { return collection(db, "users", uid, "chats", chatId, "messages"); }
 
-    async function loadChatList(uid) {
-      const q = query(chatsCol(uid), orderBy("updatedAt", "desc"), limit(100));
+    function renderChatItem(uid, docSnap) {
+      const d = docSnap.data();
+      const item = document.createElement("div");
+      item.className = "chat-item" + (docSnap.id === currentChatId ? " active" : "");
+      const titleSpan = document.createElement("span");
+      titleSpan.className = "chat-title";
+      titleSpan.textContent = d.title || "New chat";
+      const delBtn = document.createElement("span");
+      delBtn.className = "chat-delete";
+      delBtn.title = "Delete";
+      delBtn.setAttribute("role", "button");
+      delBtn.setAttribute("aria-label", `Delete chat: ${d.title || "New chat"}`);
+      delBtn.textContent = "✕";
+      titleSpan.addEventListener("click", () => selectChat(uid, docSnap.id));
+      delBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await deleteDoc(doc(db, "users", uid, "chats", docSnap.id));
+        await loadChatList(uid, { reset: true });
+      });
+      item.appendChild(titleSpan);
+      item.appendChild(delBtn);
+      return item;
+    }
+
+    // FIX: this used to hardcode limit(100) with no way to see older chats.
+    // Now paginates with a "Load more" button, using the last doc as a
+    // Firestore cursor (startAfter).
+    async function loadChatList(uid, opts = {}) {
+      const { reset = false } = opts;
+      if (reset) {
+        chatsLastDoc = null;
+        chatsExhausted = false;
+        chatListEl.innerHTML = "";
+      }
+
+      const constraints = [orderBy("updatedAt", "desc"), limit(CHATS_PAGE_SIZE)];
+      if (chatsLastDoc) constraints.splice(1, 0, startAfter(chatsLastDoc));
+      const q = query(chatsCol(uid), ...constraints);
       const snap = await getDocs(q);
-      chatListEl.innerHTML = "";
-      if (snap.empty) {
+
+      if (snap.empty && !chatsLastDoc) {
         await createNewChat(uid, true);
         return;
       }
+
+      // Drop any existing "load more" button before appending this page —
+      // it'll be re-added at the end if there's still more to load.
+      const existingBtn = document.getElementById("loadMoreChatsBtn");
+      if (existingBtn) existingBtn.remove();
+
       snap.forEach((docSnap) => {
-        const d = docSnap.data();
-        const item = document.createElement("div");
-        item.className = "chat-item" + (docSnap.id === currentChatId ? " active" : "");
-        item.innerHTML = `<span class="chat-title">${d.title || "New chat"}</span><span class="chat-delete" title="Delete">✕</span>`;
-        item.querySelector(".chat-title").addEventListener("click", () => selectChat(uid, docSnap.id));
-        item.querySelector(".chat-delete").addEventListener("click", async (e) => {
-          e.stopPropagation();
-          await deleteDoc(doc(db, "users", uid, "chats", docSnap.id));
-          await loadChatList(uid);
-        });
-        chatListEl.appendChild(item);
+        chatListEl.appendChild(renderChatItem(uid, docSnap));
       });
-      if (!currentChatId) {
-        const first = snap.docs[0];
-        await selectChat(uid, first.id);
+
+      if (!snap.empty) chatsLastDoc = snap.docs[snap.docs.length - 1];
+      chatsExhausted = snap.size < CHATS_PAGE_SIZE;
+
+      if (!chatsExhausted) {
+        const btn = document.createElement("button");
+        btn.id = "loadMoreChatsBtn";
+        btn.textContent = "Load more chats";
+        btn.addEventListener("click", async () => {
+          btn.disabled = true;
+          btn.textContent = "Loading…";
+          await loadChatList(uid, { reset: false });
+        });
+        chatListEl.appendChild(btn);
+      }
+
+      if (!currentChatId && snap.docs.length) {
+        await selectChat(uid, snap.docs[0].id);
       }
     }
 
@@ -1612,28 +2060,82 @@
       const ref = doc(chatsCol(uid));
       await setDoc(ref, { title: "New chat", createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
       if (autoSelect !== false) {
-        await loadChatList(uid);
+        currentChatId = null;
+        await loadChatList(uid, { reset: true });
       }
       return ref.id;
     }
 
     async function selectChat(uid, chatId) {
+      if (activeController && activeRequestChatId !== chatId) {
+        activeController.abort();
+      }
+
       currentChatId = chatId;
       closeSidebar();
       chatWindow.innerHTML = "";
       history = [];
-      document.querySelectorAll(".chat-item").forEach((el) => el.classList.remove("active"));
+      messagesFirstDoc = null;
+      messagesExhausted = false;
 
-      const q = query(messagesCol(uid, chatId), orderBy("createdAt", "asc"), limit(100));
+      await loadOlderMessages(uid, chatId, { initial: true });
+      await loadChatList(uid, { reset: true });
+    }
+
+    async function loadOlderMessages(uid, chatId, opts = {}) {
+      const { initial = false } = opts;
+      const constraints = [orderBy("createdAt", "desc"), limit(MESSAGES_PAGE_SIZE)];
+      if (messagesFirstDoc) constraints.splice(1, 0, startAfter(messagesFirstDoc));
+      const q = query(messagesCol(uid, chatId), ...constraints);
       const snap = await getDocs(q);
-      snap.forEach((docSnap) => {
+
+      if (snap.empty) {
+        messagesExhausted = true;
+        if (loadMoreMessagesBtn) loadMoreMessagesBtn.remove();
+        return;
+      }
+
+      const docsAsc = [...snap.docs].reverse();
+      const scrollAnchor = chatWindow.scrollHeight - chatWindow.scrollTop;
+
+      const fragment = document.createDocumentFragment();
+      const newHistoryEntries = [];
+      docsAsc.forEach((docSnap) => {
         const d = docSnap.data();
-        renderMessage("user", d.userMessage);
-        renderMessage("bot", d.reply);
-        history.push({ role: "user", content: d.userMessage });
-        history.push({ role: "assistant", content: d.reply });
+        const userRow = renderMessage("user", d.userMessage);
+        const botRow = renderMessage("bot", d.reply);
+        fragment.appendChild(userRow);
+        fragment.appendChild(botRow);
+        newHistoryEntries.push({ role: "user", content: d.userMessage }, { role: "assistant", content: d.reply });
       });
-      await loadChatList(uid); // refresh active highlight
+
+      if (initial) {
+        chatWindow.appendChild(fragment);
+        history = newHistoryEntries;
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+      } else {
+        chatWindow.insertBefore(fragment, chatWindow.firstChild);
+        history = [...newHistoryEntries, ...history];
+        chatWindow.scrollTop = chatWindow.scrollHeight - scrollAnchor;
+      }
+
+      messagesFirstDoc = snap.docs[snap.docs.length - 1];
+      messagesExhausted = snap.size < MESSAGES_PAGE_SIZE;
+
+      if (loadMoreMessagesBtn) loadMoreMessagesBtn.remove();
+      if (!messagesExhausted) {
+        loadMoreMessagesBtn = document.createElement("button");
+        loadMoreMessagesBtn.id = "loadMoreMessagesBtn";
+        loadMoreMessagesBtn.textContent = "Load older messages";
+        loadMoreMessagesBtn.addEventListener("click", async () => {
+          loadMoreMessagesBtn.disabled = true;
+          loadMoreMessagesBtn.textContent = "Loading…";
+          await loadOlderMessages(uid, chatId, { initial: false });
+        });
+        chatWindow.insertBefore(loadMoreMessagesBtn, chatWindow.firstChild);
+      } else {
+        loadMoreMessagesBtn = null;
+      }
     }
 
     newChatBtn.addEventListener("click", async () => {
@@ -1655,15 +2157,20 @@
         document.getElementById("signOutBtn").onclick = () => signOut(auth);
         inputBar.style.display = "flex";
         currentChatId = null;
+        history = [];
+        if (activeController) { activeController.abort(); activeController = null; }
         await loadModels();
-        await loadChatList(user.uid);
+        await loadChatList(user.uid, { reset: true });
       } else {
+        if (activeController) { activeController.abort(); activeController = null; }
         authArea.innerHTML = `<button id="signInBtn">Sign in with Google</button>`;
         document.getElementById("signInBtn").onclick = () =>
           signInWithPopup(auth, new GoogleAuthProvider());
         inputBar.style.display = "none";
         chatListEl.innerHTML = "";
         modelSelect.innerHTML = "";
+        currentChatId = null;
+        history = [];
         chatWindow.innerHTML = `
         <div id="signedOutNotice">
           <div class="empty-mark" id="emptyMark"></div>
@@ -1677,12 +2184,30 @@
     // ---------- Sending a message ----------
     async function send() {
       const text = messageInput.value.trim();
-      if (!text || !currentUser || !currentChatId) return;
+      if (!text || !currentUser) return;
+
+      if (!currentChatId) {
+        alert("Still setting up your chat — please try again in a moment.");
+        return;
+      }
+
+      if (!modelsLoaded || !selectedModelId) {
+        alert("Models are still loading (or failed to load) — please wait a moment and try again.");
+        return;
+      }
+
+      const sendChatId = currentChatId;
       messageInput.value = "";
       messageInput.style.height = "auto";
       sendBtn.disabled = true;
       renderMessage("user", text);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
       renderTyping();
+
+      if (activeController) activeController.abort();
+      const controller = new AbortController();
+      activeController = controller;
+      activeRequestChatId = sendChatId;
 
       let stream = null;
       let fullReply = "";
@@ -1696,9 +2221,12 @@
             Authorization: `Bearer ${idToken}`,
           },
           body: JSON.stringify({ message: text, history, modelId: selectedModelId }),
+          signal: controller.signal,
         });
 
         if (!res.ok || !res.body) throw new Error(`Backend responded with ${res.status}`);
+
+        const isStillActiveChat = () => currentChatId === sendChatId;
 
         removeTyping();
         stream = createStreamingBubble();
@@ -1722,6 +2250,8 @@
             let event;
             try { event = JSON.parse(data); } catch { continue; }
 
+            if (!isStillActiveChat()) continue;
+
             if (event.type === "queued") {
               stream.setQueueStatus(event.position, event.total, event.estimatedWaitSeconds);
             } else if (event.type === "reasoning") {
@@ -1738,28 +2268,57 @@
           }
         }
 
-        const { displayText, exportData, wasTruncated } = parseExportBlock(fullReply);
-        if (exportData) {
-          let noteHtml = "";
-          if (wasTruncated) {
-            noteHtml = `<p style="color:var(--muted);font-size:0.82rem;font-style:italic;margin-top:8px;">⚠ The response was cut short, so this file may have fewer slides/sections than you asked for. Try asking for a shorter deck, or send the message again.</p>`;
+        if (!fullReply.trim()) {
+          console.warn("Model returned an empty response (no content/error/done events carried any text). Check the Render backend logs for this request — the upstream model call likely failed silently or returned a non-streaming/unexpected response shape.");
+          if (isStillActiveChat()) {
+            stream.contentEl.innerHTML = renderMarkdown(
+              "_The model didn't return any content. This can happen if the selected model is unavailable, misconfigured, or doesn't support streaming the way this app expects. Try again, or switch models from the dropdown above._"
+            );
           }
-          stream.contentEl.innerHTML = renderMarkdown(displayText || "Here's what I put together:") + noteHtml;
-          addExportBar(stream.bubbleEl, exportData);
+        }
+
+        const { displayText, exportData, wasTruncated } = parseExportBlock(fullReply);
+
+        let finalExportData = exportData;
+        let usedFallbackTemplate = false;
+        if (!finalExportData && looksLikeDocumentRequest(text) && fullReply.trim()) {
+          finalExportData = buildFallbackExportData(text, fullReply);
+          usedFallbackTemplate = !!finalExportData;
+          if (!finalExportData) {
+            console.warn("Document request detected, but the reply had no headings/lists to build a fallback structure from.");
+          }
+        }
+
+        if (isStillActiveChat()) {
+          if (exportData) {
+            let noteHtml = "";
+            if (wasTruncated) {
+              noteHtml = `<p style="color:var(--muted);font-size:0.82rem;font-style:italic;margin-top:8px;">⚠ The response was cut short (or a garbled line was removed), so this file may have fewer slides/sections/bullets than you asked for. Try asking for a shorter deck, or send the message again.</p>`;
+            }
+            stream.contentEl.innerHTML = renderMarkdown(displayText || "Here's what I put together:") + noteHtml;
+            addExportBar(stream.bubbleEl, exportData);
+          } else if (usedFallbackTemplate) {
+            const noteHtml = `<p style="color:var(--muted);font-size:0.82rem;font-style:italic;margin-top:8px;">ℹ️ This model's reply wasn't pre-formatted for export, so the file below was auto-built from the headings and bullet points in its response above. Worth a quick check before you rely on it.</p>`;
+            stream.contentEl.innerHTML = renderMarkdown(fullReply) + noteHtml;
+            addExportBar(stream.bubbleEl, finalExportData);
+          }
         }
         const cleanReply = exportData ? displayText : fullReply;
 
-        history.push({ role: "user", content: text });
-        history.push({ role: "assistant", content: cleanReply });
-
-        const chatRef = doc(db, "users", currentUser.uid, "chats", currentChatId);
-        await addDoc(messagesCol(currentUser.uid, currentChatId), {
+        const chatRef = doc(db, "users", currentUser.uid, "chats", sendChatId);
+        await addDoc(messagesCol(currentUser.uid, sendChatId), {
           userMessage: text,
           reply: cleanReply,
           createdAt: serverTimestamp(),
         });
 
-        const isFirstMessage = history.length <= 2;
+        if (isStillActiveChat()) {
+          history.push({ role: "user", content: text });
+          history.push({ role: "assistant", content: cleanReply });
+        }
+
+        const existingMsgsSnap = await getDocs(query(messagesCol(currentUser.uid, sendChatId), limit(2)));
+        const isFirstMessage = existingMsgsSnap.size <= 1;
         await setDoc(
           chatRef,
           {
@@ -1768,16 +2327,29 @@
           },
           { merge: true }
         );
-        if (isFirstMessage) await loadChatList(currentUser.uid);
+        if (isFirstMessage) await loadChatList(currentUser.uid, { reset: true });
       } catch (err) {
-        console.error(err);
-        removeTyping();
-        if (stream) {
-          stream.finish();
+        if (err && err.name === "AbortError") {
+          console.info("Request aborted (superseded by a newer action).");
         } else {
-          renderMessage("bot", "Sorry, something went wrong. Please try again.");
+          console.error(err);
+          removeTyping();
+          if (stream) {
+            stream.finish();
+            if (currentChatId === sendChatId) {
+              stream.contentEl.innerHTML = renderMarkdown("_Sorry, something went wrong sending that message. Your draft has been restored below — try again._");
+            }
+          } else if (currentChatId === sendChatId) {
+            renderMessage("bot", "Sorry, something went wrong. Please try again.");
+          }
+          if (!messageInput.value) {
+            messageInput.value = text;
+            messageInput.style.height = "auto";
+            messageInput.style.height = Math.min(messageInput.scrollHeight, 140) + "px";
+          }
         }
       } finally {
+        if (activeController === controller) activeController = null;
         sendBtn.disabled = false;
         messageInput.focus();
       }

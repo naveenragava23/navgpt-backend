@@ -1958,11 +1958,20 @@
         });
         const data = await res.json();
         modelSelect.innerHTML = "";
+        
+        const groups = {};
         (data.models || []).forEach((m) => {
+          const providerLabel = m.provider === "nvidia" ? "NVIDIA NIM" : "OpenRouter";
+          if (!groups[providerLabel]) {
+            const optgroup = document.createElement("optgroup");
+            optgroup.label = providerLabel;
+            groups[providerLabel] = optgroup;
+            modelSelect.appendChild(optgroup);
+          }
           const opt = document.createElement("option");
           opt.value = m.id;
           opt.textContent = m.label;
-          modelSelect.appendChild(opt);
+          groups[providerLabel].appendChild(opt);
         });
         if (data.models && data.models.length) {
           selectedModelId = data.models[0].id;

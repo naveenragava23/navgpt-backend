@@ -52,7 +52,7 @@ const _nvidiaSlot =
       }
     : null;
 
-const _openrouterSlots = [1, 2]
+const _openrouterSlots = [1]
   .map((n) => ({
     id: `model${n}`,
     provider: "openrouter",
@@ -148,7 +148,7 @@ app.get("/", (req, res) => res.send("NavGPT backend is running."));
 // ---------- Model list for the frontend dropdown ----------
 app.get("/api/models", requireAuth, (req, res) => {
   res.json({
-    models: MODEL_SLOTS.map((m) => ({ id: m.id, label: m.label })),
+    models: MODEL_SLOTS.map((m) => ({ id: m.id, label: m.label, provider: m.provider })),
   });
 });
 

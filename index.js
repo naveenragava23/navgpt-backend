@@ -4,9 +4,23 @@ import admin from "firebase-admin";
 
 const app = express();
 
-// For production, restrict this to your Firebase Hosting origin, e.g.:
-// app.use(cors({ origin: "https://naveen-gpt.web.app" }));
-app.use(cors());
+const ALLOWED_ORIGINS = [
+  "https://naveen-gpt.web.app",
+  "https://naveen-gpt.firebaseapp.com",
+  // Keep localhost for local dev — Render ignores this in production.
+  "http://localhost:5000",
+  "http://localhost:3000",
+];
+
+app.use(cors({
+  origin: (origin, cb) => {
+    // Allow requests with no origin (e.g. Render health checks, curl)
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    cb(new Error(`CORS: origin ${origin} not allowed`));
+  },
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
 app.use(express.json({ limit: "2mb" }));
 
 app.use((req, res, next) => {

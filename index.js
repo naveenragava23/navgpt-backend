@@ -58,12 +58,12 @@ const NVIDIA_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
 const _nvidiaSlot =
   process.env.NVIDIA_API_KEY && process.env.NVIDIA_MODEL
     ? {
-        id: "nvidia",
-        provider: "nvidia",
-        apiKey: process.env.NVIDIA_API_KEY,
-        model: process.env.NVIDIA_MODEL,
-        label: process.env.NVIDIA_LABEL || "Nemotron Ultra",
-      }
+      id: "nvidia",
+      provider: "nvidia",
+      apiKey: process.env.NVIDIA_API_KEY,
+      model: process.env.NVIDIA_MODEL,
+      label: process.env.NVIDIA_LABEL || "Nemotron Ultra",
+    }
     : null;
 
 const _openrouterSlots = [1]
@@ -466,14 +466,33 @@ async function runChat({ req, res, send, userMessage, history, slot }) {
     ? `\n\nRelevant study material:\n${contextChunks.map((c, i) => `[${i + 1}] ${c.content}`).join("\n\n")}`
     : "";
 
+  // Build history, dropping any turns with empty content (Cohere rejects them
+  // with a 400 "must have non-empty content" error). Also collapse consecutive
+  // messages with the same role into one (another Cohere requirement that most
+  // other providers tolerate but Cohere enforces strictly).
+  const historyMessages = history
+    .slice(-20)
+    .map((m) => ({
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: String(m.content ?? "").trim(),
+    }))
+    .filter((m) => m.content.length > 0)
+    .reduce((acc, m) => {
+      // Merge back-to-back messages from the same role
+      if (acc.length > 0 && acc[acc.length - 1].role === m.role) {
+        acc[acc.length - 1].content += "\n" + m.content;
+      } else {
+        acc.push(m);
+      }
+      return acc;
+    }, []);
+
   const messages = [
     { role: "system", content: SYSTEM_PROMPT + contextBlock },
-    ...history.slice(-20).map((m) => ({
-      role: m.role === "assistant" ? "assistant" : "user",
-      content: String(m.content ?? ""),
-    })),
+    ...historyMessages,
     { role: "user", content: userMessage },
   ];
+
 
   // ---- Build provider-specific request ----
   const isNvidia = slot.provider === "nvidia";

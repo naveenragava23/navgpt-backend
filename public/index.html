@@ -962,7 +962,7 @@
   -->
   <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js" crossorigin="anonymous"
     referrerpolicy="no-referrer"></script>
-  <script src="https://unpkg.com/docx@8.5.0/build/index.js" crossorigin="anonymous"
+  <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.js" crossorigin="anonymous"
     referrerpolicy="no-referrer"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" crossorigin="anonymous"
     referrerpolicy="no-referrer"></script>
@@ -1585,23 +1585,42 @@
     }
 
     function downloadBlob(blob, filename) {
+      // Retype the blob with the correct MIME so mobile browsers don't
+      // fall back to saving it as a generic .zip or .bin file.
+      const mimeMap = {
+        ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".pdf":  "application/pdf",
+      };
+      const ext = filename.slice(filename.lastIndexOf(".")).toLowerCase();
+      const mime = mimeMap[ext] || blob.type || "application/octet-stream";
+      const typedBlob = new Blob([blob], { type: mime });
+
       if (window.AndroidDownloader && window.AndroidDownloader.saveBase64File) {
         const reader = new FileReader();
         reader.onload = () => {
           const base64 = reader.result.split(",")[1];
-          window.AndroidDownloader.saveBase64File(filename, base64, blob.type || "application/octet-stream");
+          window.AndroidDownloader.saveBase64File(filename, base64, mime);
         };
-        reader.readAsDataURL(blob);
+        reader.readAsDataURL(typedBlob);
         return;
       }
-      const url = URL.createObjectURL(blob);
+
+      // navigator.msSaveBlob is IE/old-Edge; some mobile browsers also
+      // expose it and it bypasses the anchor-download limitation.
+      if (window.navigator && window.navigator.msSaveBlob) {
+        window.navigator.msSaveBlob(typedBlob, filename);
+        return;
+      }
+
+      const url = URL.createObjectURL(typedBlob);
       const a = document.createElement("a");
       a.href = url;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
     }
 
     function dataUrlToUint8Array(dataUrl) {
@@ -1758,9 +1777,36 @@
       await pptx.write("blob").then((blob) => downloadBlob(blob, `${safeFilename(data.title)}.pptx`));
     }
 
+    // Lazy-load docx from a fallback CDN if the primary (jsDelivr) was blocked.
+    async function ensureDocxLoaded() {
+      if (window.docx) return;
+      const fallbacks = [
+        "https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.js",
+        "https://unpkg.com/docx@8.5.0/build/index.js",
+      ];
+      for (const src of fallbacks) {
+        try {
+          await new Promise((resolve, reject) => {
+            const s = document.createElement("script");
+            s.src = src;
+            s.onload = resolve;
+            s.onerror = reject;
+            document.head.appendChild(s);
+          });
+          if (window.docx) return;
+        } catch (_) { /* try next */ }
+      }
+      throw new Error(
+        "The 'docx' library could not be loaded from any CDN.\n" +
+        "This is usually caused by an ad-blocker, firewall, or network restriction blocking cdn.jsdelivr.net and unpkg.com.\n" +
+        "Try disabling your ad-blocker for this page, or open the Network tab in DevTools to see which URL is being blocked."
+      );
+    }
+
     async function generateDOCX(data, bannerDataUrl, footerText) {
+      await ensureDocxLoaded();
       if (!window.docx) {
-        throw new Error("docx library failed to load from the CDN (blocked by an ad-blocker, firewall, or CSP?). Reload the page and check the Network tab for unpkg.com.");
+        throw new Error("docx library could not be loaded. Please disable your ad-blocker or check your network/firewall settings.");
       }
       const {
         Document, Packer, Paragraph, HeadingLevel, ImageRun, TextRun,

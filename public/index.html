@@ -962,8 +962,10 @@
   -->
   <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js" crossorigin="anonymous"
     referrerpolicy="no-referrer"></script>
-  <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.js" crossorigin="anonymous"
-    referrerpolicy="no-referrer"></script>
+  <!-- docx library self-hosted (avoids CDN ad-blocker/firewall blocking) -->
+  <script src="/libs/docx.js"></script>
+  <!-- FileSaver.js self-hosted — reliable cross-browser file download (fixes PPT as .zip on mobile) -->
+  <script src="/libs/FileSaver.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" crossorigin="anonymous"
     referrerpolicy="no-referrer"></script>
   <!-- Markdown rendering -->
@@ -1585,8 +1587,8 @@
     }
 
     function downloadBlob(blob, filename) {
-      // Retype the blob with the correct MIME so mobile browsers don't
-      // fall back to saving it as a generic .zip or .bin file.
+      // Resolve the correct MIME type from the file extension so that
+      // every browser (desktop + mobile) knows what kind of file it is.
       const mimeMap = {
         ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -1596,6 +1598,7 @@
       const mime = mimeMap[ext] || blob.type || "application/octet-stream";
       const typedBlob = new Blob([blob], { type: mime });
 
+      // Android WebView bridge (native app)
       if (window.AndroidDownloader && window.AndroidDownloader.saveBase64File) {
         const reader = new FileReader();
         reader.onload = () => {
@@ -1606,8 +1609,15 @@
         return;
       }
 
-      // navigator.msSaveBlob is IE/old-Edge; some mobile browsers also
-      // expose it and it bypasses the anchor-download limitation.
+      // FileSaver.js handles iOS Safari, Android Chrome, and all desktop
+      // browsers correctly — it replaces the broken <a download> approach
+      // that causes mobile browsers to save PPTX/DOCX files as .zip.
+      if (window.saveAs) {
+        window.saveAs(typedBlob, filename);
+        return;
+      }
+
+      // Final fallback for very old browsers
       if (window.navigator && window.navigator.msSaveBlob) {
         window.navigator.msSaveBlob(typedBlob, filename);
         return;
@@ -1777,36 +1787,23 @@
       await pptx.write("blob").then((blob) => downloadBlob(blob, `${safeFilename(data.title)}.pptx`));
     }
 
-    // Lazy-load docx from a fallback CDN if the primary (jsDelivr) was blocked.
+    // Lazy-load docx from self-hosted file if it didn't load on page start.
     async function ensureDocxLoaded() {
       if (window.docx) return;
-      const fallbacks = [
-        "https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.js",
-        "https://unpkg.com/docx@8.5.0/build/index.js",
-      ];
-      for (const src of fallbacks) {
-        try {
-          await new Promise((resolve, reject) => {
-            const s = document.createElement("script");
-            s.src = src;
-            s.onload = resolve;
-            s.onerror = reject;
-            document.head.appendChild(s);
-          });
-          if (window.docx) return;
-        } catch (_) { /* try next */ }
-      }
-      throw new Error(
-        "The 'docx' library could not be loaded from any CDN.\n" +
-        "This is usually caused by an ad-blocker, firewall, or network restriction blocking cdn.jsdelivr.net and unpkg.com.\n" +
-        "Try disabling your ad-blocker for this page, or open the Network tab in DevTools to see which URL is being blocked."
-      );
+      // Self-hosted at /libs/docx.js (served from Firebase Hosting — no CDN required)
+      await new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = "/libs/docx.js";
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
     }
 
     async function generateDOCX(data, bannerDataUrl, footerText) {
       await ensureDocxLoaded();
       if (!window.docx) {
-        throw new Error("docx library could not be loaded. Please disable your ad-blocker or check your network/firewall settings.");
+        throw new Error("docx library could not be loaded. Please reload the page and try again.");
       }
       const {
         Document, Packer, Paragraph, HeadingLevel, ImageRun, TextRun,

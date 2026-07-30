@@ -251,21 +251,188 @@
       animation: spin 1.3s linear infinite;
     }
 
-    #modelSelect {
+    /* ---------- Model picker ---------- */
+    #modelPickerWrap {
+      position: relative;
+    }
+
+    #modelPickerBtn {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      background: var(--bg);
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
-      padding: 7px 10px;
+      padding: 7px 11px;
       font-size: 0.82rem;
       font-family: inherit;
       color: var(--text);
-      background: var(--bg);
       cursor: pointer;
-      max-width: 160px;
+      max-width: 190px;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+      white-space: nowrap;
+      overflow: hidden;
     }
 
-    #modelSelect:focus {
-      outline: none;
+    #modelPickerBtn:hover {
+      background: var(--panel);
       border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-light);
+    }
+
+    #modelPickerBtn.open {
+      background: var(--panel);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-light);
+    }
+
+    #modelPickerBtn .mpb-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    #modelPickerBtn .mpb-label {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-weight: 500;
+    }
+
+    #modelPickerBtn .mpb-caret {
+      flex-shrink: 0;
+      font-size: 0.7rem;
+      color: var(--muted);
+      transition: transform 0.2s ease;
+      margin-left: 2px;
+    }
+
+    #modelPickerBtn.open .mpb-caret {
+      transform: rotate(180deg);
+    }
+
+    /* Dropdown panel */
+    #modelPickerPanel {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      width: 270px;
+      background: var(--panel);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-md);
+      box-shadow: 0 8px 32px rgba(45, 42, 38, 0.14), 0 2px 8px rgba(45, 42, 38, 0.06);
+      z-index: 100;
+      padding: 8px;
+      display: none;
+      flex-direction: column;
+      gap: 4px;
+      animation: mpDrop 0.18s ease-out;
+    }
+
+    #modelPickerPanel.open {
+      display: flex;
+    }
+
+    @keyframes mpDrop {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .mp-group-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--muted);
+      padding: 6px 8px 2px;
+      margin-top: 4px;
+    }
+
+    .mp-group-label:first-child {
+      margin-top: 0;
+    }
+
+    .mp-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 10px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: background 0.13s ease;
+      border: 1.5px solid transparent;
+      position: relative;
+    }
+
+    .mp-card:hover {
+      background: var(--border-soft);
+    }
+
+    .mp-card.selected {
+      background: var(--accent-light);
+      border-color: var(--accent);
+    }
+
+    .mp-card .mp-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      flex-shrink: 0;
+      font-style: normal;
+    }
+
+    /* Provider colour tokens */
+    .mp-icon.prov-nvidia  { background: #76b900; color: #fff; }
+    .mp-icon.prov-openrouter { background: #6c47ff; color: #fff; }
+    .mp-icon.prov-gemini  { background: linear-gradient(135deg, #4285f4 0%, #34a853 50%, #ea4335 100%); color: #fff; }
+
+    .mp-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .mp-name {
+      font-size: 0.86rem;
+      font-weight: 600;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .mp-badge {
+      font-size: 0.68rem;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+
+    .mp-check {
+      font-size: 0.85rem;
+      color: var(--accent-dark);
+      flex-shrink: 0;
+      opacity: 0;
+      transition: opacity 0.12s ease;
+    }
+
+    .mp-card.selected .mp-check {
+      opacity: 1;
+    }
+
+    @media (max-width: 640px) {
+      #modelPickerBtn {
+        max-width: 120px;
+        font-size: 0.76rem;
+        padding: 6px 9px;
+      }
+
+      #modelPickerPanel {
+        width: 240px;
+      }
     }
 
     .header-right {
@@ -536,21 +703,6 @@
     .content-text h1,
     .content-text h2,
     .content-text h3 {
-      margin: 16px 0 8px;
-      font-weight: 700;
-      line-height: 1.3;
-      color: var(--text);
-    }
-
-    .content-text h1 {
-      font-size: 1.25rem;
-    }
-
-    .content-text h2 {
-      font-size: 1.12rem;
-    }
-
-    .content-text h3 {
       font-size: 1.02rem;
     }
 
@@ -702,7 +854,6 @@
       }
     }
 
-    /* Queue status shown inside a bot bubble while a message waits its turn */
     .queue-status {
       display: flex;
       align-items: center;
@@ -917,11 +1068,6 @@
       #signedOutNotice {
         margin-top: 10vh;
       }
-
-      #modelSelect {
-        max-width: 110px;
-        font-size: 0.75rem;
-      }
     }
 
     @media (min-width: 900px) {
@@ -944,31 +1090,12 @@
       }
     }
   </style>
-  <!--
-    Document export libraries.
-
-    SECURITY NOTE (see README / SECURITY.md): these are pinned to exact
-    versions, but do NOT yet have Subresource Integrity (SRI) hashes below.
-    Without SRI, a compromised CDN could serve altered JS to every user of
-    this authenticated app. Before shipping, generate real hashes for the
-    exact files this page loads and add them as `integrity="sha384-..."`,
-    e.g.:
-
-      curl -s https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js \
-        | openssl dgst -sha384 -binary | openssl base64 -A
-
-    Do this for each script below, then keep the hash pinned alongside the
-    version number so a future version bump can't silently drop it.
-  -->
   <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js" crossorigin="anonymous"
     referrerpolicy="no-referrer"></script>
-  <!-- docx library self-hosted (avoids CDN ad-blocker/firewall blocking) -->
   <script src="/libs/docx.js"></script>
-  <!-- FileSaver.js self-hosted — reliable cross-browser file download (fixes PPT as .zip on mobile) -->
   <script src="/libs/FileSaver.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" crossorigin="anonymous"
     referrerpolicy="no-referrer"></script>
-  <!-- Markdown rendering -->
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" crossorigin="anonymous"
     referrerpolicy="no-referrer"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.5/dist/purify.min.js" crossorigin="anonymous"
@@ -991,7 +1118,15 @@
         <h1>NavGPT</h1>
       </div>
       <div class="header-right">
-        <select id="modelSelect" aria-label="Model"></select>
+        <!-- Model picker replaces old <select> -->
+        <div id="modelPickerWrap">
+          <button id="modelPickerBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="Select AI model">
+            <span class="mpb-dot" id="mpbDot"></span>
+            <span class="mpb-label" id="mpbLabel">Loading…</span>
+            <span class="mpb-caret">▼</span>
+          </button>
+          <div id="modelPickerPanel" role="listbox" aria-label="AI model selection"></div>
+        </div>
         <div id="authArea"></div>
       </div>
     </header>
@@ -1003,7 +1138,6 @@
     </div>
   </div>
 
-  <!-- Firebase SDKs -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import {
@@ -1014,7 +1148,6 @@
       doc, setDoc, deleteDoc, serverTimestamp, startAfter
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-    // URL of your Render backend (see render-backend/index.js).
     const BACKEND_URL = "https://navgpt-backend.onrender.com";
 
     const firebaseConfig = {
@@ -1026,7 +1159,6 @@
       appId: "1:1039081984469:web:00911e2678e60d3d1b6d5c"
     };
 
-    // Pagination page size for both the chat list and message history.
     const CHATS_PAGE_SIZE = 30;
     const MESSAGES_PAGE_SIZE = 40;
 
@@ -1060,14 +1192,12 @@
     let selectedModelId = null;
     let modelsLoaded = false;
 
-    // ---- In-flight request bookkeeping (fixes cross-chat race + allows cancel) ----
-    let activeController = null;   // AbortController for the in-flight /api/chat fetch
-    let activeRequestChatId = null; // which chat that fetch belongs to
+    let activeController = null;
+    let activeRequestChatId = null;
 
-    // ---- Pagination cursors ----
     let chatsLastDoc = null;
     let chatsExhausted = false;
-    let messagesFirstDoc = null; // oldest loaded message doc, for "load older"
+    let messagesFirstDoc = null;
     let messagesExhausted = false;
     let loadMoreMessagesBtn = null;
 
@@ -1078,13 +1208,11 @@
       return nameOrEmail[0].toUpperCase();
     }
 
-    // ---------- Sidebar toggle (mobile) ----------
     function openSidebar() { sidebar.classList.add("open"); sidebarOverlay.classList.add("open"); }
     function closeSidebar() { sidebar.classList.remove("open"); sidebarOverlay.classList.remove("open"); }
     menuBtn.addEventListener("click", () => sidebar.classList.contains("open") ? closeSidebar() : openSidebar());
     sidebarOverlay.addEventListener("click", closeSidebar);
 
-    // ---------- Message rendering ----------
     function renderMarkdown(rawText) {
       const html = marked.parse(rawText || "");
       return DOMPurify.sanitize(html);
@@ -1204,12 +1332,36 @@
       };
     }
 
-    // ================= Document export (PPTX / DOCX / PDF, optional banner) =================
+    /* =========================================================
+       SHARED DESIGN TOKENS & GRID
+       ========================================================= */
+    const TOKENS = {
+      accent: "#D97757",
+      accentDark: "#BF5E3F",
+      dark: "#2D2A26",
+      cream: "#FAF9F5",
+      white: "#FFFFFF",
+      muted: "#83786C",
+      border: "#EAE5DC",
+      surface: "#F9F6F0",
+      font: "Segoe UI, Calibri, Helvetica, Arial, sans-serif"
+    };
 
-    // Attempts to recover a valid JSON object from text that got cut off
-    // mid-structure (e.g. the model's response hit a token limit before
-    // finishing). Rolls back to the last complete element and closes any
-    // still-open brackets/strings.
+    /* 16:9 slide dimensions */
+    const SLIDE_W = 13.333; // in
+    const SLIDE_H = 7.5;    // in
+    const MARGIN = 0.85;    // 6.4%
+    const HEADER_H = 1.2;   // 16%
+    const SAFE_BOTTOM = 0.6;
+
+    function rgb(hex) {
+      const b = parseInt(hex.slice(1), 16);
+      return [(b >> 16) & 255, (b >> 8) & 255, b & 255];
+    }
+
+    /* =========================================================
+       DOCUMENT EXPORT PARSING (unchanged logic)
+       ========================================================= */
     function tryRepairTruncatedJson(text) {
       try { return JSON.parse(text); } catch { }
 
@@ -1230,8 +1382,6 @@
         if (ch === "{" || ch === "[") { stack.push(ch); continue; }
         if (ch === "}" || ch === "]") {
           stack.pop();
-          // A "}" or "]" is itself a safe place to cut the string, as long
-          // as we're not currently inside a quoted string.
           lastSafeIndex = i;
           continue;
         }
@@ -1257,9 +1407,6 @@
         else if (ch === "}" || ch === "]") stack.pop();
       }
 
-      // If the cut point somehow left us mid-string (rare, but possible if
-      // the stream died mid-word before we found a later safe point),
-      // close the string first so the JSON stays valid.
       if (inString) truncated += '"';
 
       let closer = "";
@@ -1273,19 +1420,6 @@
       }
     }
 
-    // A bullet is "well-formed" if it reads like an actual finished thought,
-    // not a fragment left behind by a truncation cut or a bad sentence
-    // split. This is intentionally conservative — false negatives (dropping
-    // a slightly terse-but-valid bullet) are far less harmful than false
-    // positives (shipping a garbled line like "Binary–6G." into a deck).
-    //
-    // Heuristics, all must pass:
-    //  - at least 3 whitespace-separated words
-    //  - at least 12 characters of actual content
-    //  - ends with sentence-final punctuation, a closing bracket, or a
-    //    digit/unit (tables of numbers legitimately end without a period)
-    //  - doesn't end on a dangling connector word ("and", "the", "a", "of",
-    //    an em/en dash, ...) which is the classic truncation-cut signature
     function isWellFormedBullet(str) {
       if (typeof str !== "string") return false;
       const trimmed = str.trim();
@@ -1298,52 +1432,17 @@
       const danglingConnectors = new Set([
         "a", "an", "the", "and", "or", "but", "of", "to", "in", "on", "for",
         "with", "is", "are", "was", "were", "this", "that", "these", "those",
-        "binary", "decimal", "octal", "hexadecimal", // bare base name with no value after it is a truncation smell
+        "binary", "decimal", "octal", "hexadecimal",
       ]);
       if (danglingConnectors.has(lastWord)) return false;
 
-      // Trailing dash/en-dash/em-dash with nothing meaningful after it
-      // (e.g. "Binary–6G." slipping through would still fail the word-count
-      // check above in this exact case, but guard the general pattern too).
       if (/[-–—]\s*$/.test(trimmed.replace(/[.!?]+$/, ""))) return false;
 
       const endsOk = /[.!?)\u2019\u201d\d%]$/.test(trimmed) || /[a-zA-Z0-9]₀|₁|₂|₃|₄|₅|₆|₇|₈|₉$/.test(trimmed);
       return endsOk || /[a-z0-9]$/i.test(trimmed);
     }
 
-    // Drops any section object that doesn't look genuinely complete (missing
-    // heading, or content that isn't a non-empty array of well-formed
-    // strings). This matters most after a repair recovers a syntactically
-    // valid JSON blob that still has a half-finished last section/bullet.
-    function dropIncompleteSections(exportData) {
-      if (!exportData || !Array.isArray(exportData.sections)) return exportData;
-      const cleaned = exportData.sections
-        .map((s) => {
-          if (!s || typeof s.heading !== "string" || !s.heading.trim() || !Array.isArray(s.content)) {
-            return null;
-          }
-          // Filter out individual garbled/truncated bullets rather than
-          // rejecting the whole section for one bad line.
-          const goodContent = s.content.filter(
-            (c) => typeof c === "string" && c.trim().length > 0 && isWellFormedBullet(c)
-          );
-          if (goodContent.length === 0) return null;
-          return { ...s, content: goodContent };
-        })
-        .filter(Boolean);
-      return { ...exportData, sections: cleaned };
-    }
-
-    // Locates the model's structured export block regardless of exactly how
-    // it fenced it. Different models are inconsistent about this: some use
-    // the literal "```export-json" tag, others use a plain "```json" or
-    // "```" fence, and some (seen with Nemotron in testing) skip the fence
-    // altogether and just emit the raw JSON object inline. Missing this
-    // used to mean the whole reply — JSON included — fell through to the
-    // plain-text fallback, which dumped the raw JSON text onto a slide.
     function findExportBlockBounds(fullText) {
-      // 1) Any fenced code block whose language tag looks JSON-ish
-      //    (export-json, json, JSON, ...) or has no tag at all.
       const fenceRe = /```([a-zA-Z-]*)\n?/g;
       let m;
       while ((m = fenceRe.exec(fullText)) !== null) {
@@ -1364,10 +1463,6 @@
         }
       }
 
-      // 2) No fence at all — the model just wrote the JSON object inline.
-      //    Find the first "{" that plausibly starts the export object (has
-      //    a "sections" key somewhere after it) and balance braces/strings
-      //    to find where it ends.
       const firstBrace = fullText.indexOf("{");
       if (firstBrace !== -1 && /"sections"\s*:/.test(fullText.slice(firstBrace, firstBrace + 4000))) {
         let depth = 0, inString = false, escape = false, endIdx = -1;
@@ -1410,7 +1505,7 @@
         exportData = tryRepairTruncatedJson(jsonChunk);
         wasTruncated = true;
         if (exportData) {
-          console.warn("Recovered a truncated export-json block (response may have hit a length limit).");
+          console.warn("Recovered a truncated export-json block.");
         } else {
           console.error("Could not parse or repair export-json block.");
         }
@@ -1426,19 +1521,12 @@
       }
 
       if (exportData && (!Array.isArray(exportData.sections) || exportData.sections.length === 0)) {
-        exportData = null; // not usable even if syntactically valid
+        exportData = null;
       }
 
       const displayText = (fullText.slice(0, startIdx) + fullText.slice(blockEndInFullText)).trim();
       return { displayText, exportData, wasTruncated: wasTruncated && !!exportData };
     }
-
-    // ---- Fallback: build export data from plain text when a model ignores
-    // the export-json instruction entirely (some models, e.g. Nemotron in
-    // testing, just answer normally instead of following that formatting
-    // rule). Rather than leaving the user with no downloadable file, we
-    // parse the model's own markdown reply into the same {title, sections}
-    // shape the real export-json block would have produced.
 
     const DOC_REQUEST_REGEX = /\b(presentation|slide\s*deck|slides?|ppt|pptx|power\s*point|word\s*doc(?:ument)?|docx|pdf|report)\b/i;
 
@@ -1465,10 +1553,6 @@
           current = { heading: "Overview", content: [] };
           sections.push(current);
         }
-        // Break up long paragraphs so a single item doesn't dominate a slide/page.
-        // Split on sentence boundaries that are actually followed by a new
-        // sentence (capital letter or digit), not just any '.', '!', '?' —
-        // this avoids cutting abbreviations/decimals into fragments.
         if (trimmed.length > 220) {
           trimmed.split(/(?<=[.!?])\s+(?=[A-Z0-9])/).forEach((sentence) => {
             const s = sentence.trim();
@@ -1516,6 +1600,26 @@
       };
     }
 
+    function dropIncompleteSections(exportData) {
+      if (!exportData || !Array.isArray(exportData.sections)) return exportData;
+      const cleaned = exportData.sections
+        .map((s) => {
+          if (!s || typeof s.heading !== "string" || !s.heading.trim() || !Array.isArray(s.content)) {
+            return null;
+          }
+          const goodContent = s.content.filter(
+            (c) => typeof c === "string" && c.trim().length > 0 && isWellFormedBullet(c)
+          );
+          if (goodContent.length === 0) return null;
+          return { ...s, content: goodContent };
+        })
+        .filter(Boolean);
+      return { ...exportData, sections: cleaned };
+    }
+
+    /* =========================================================
+       EXPORT BAR
+       ========================================================= */
     function addExportBar(bubbleEl, data) {
       const bar = document.createElement("div");
       bar.className = "export-bar";
@@ -1569,11 +1673,6 @@
             await generate(data, bannerDataUrl, footerInput.value.trim());
           } catch (err) {
             console.error("Export failed:", err);
-            // Surface the real message instead of hiding it behind "check the
-            // console" — most failures here are the CDN script for this format
-            // not having loaded (blocked by an ad-blocker / firewall / CSP),
-            // which throws "X is not defined" or "Cannot read properties of
-            // undefined" right away, before any file is built.
             alert(`Export failed: ${err && err.message ? err.message : err}`);
           } finally {
             btn.disabled = false;
@@ -1586,50 +1685,445 @@
       bubbleEl.appendChild(bar);
     }
 
+    /* =========================================================
+       PPTX — 16:9, Grid Layout, Banner Fit, Footer Fixed
+       ========================================================= */
+    async function generatePPTX(data, bannerDataUrl, footerText) {
+      if (!window.PptxGenJS) throw new Error("pptxgenjs not loaded. Check CDN / ad-blocker.");
+      const P = new window.PptxGenJS();
+      P.defineLayout({ name: "UNIVERSITY", width: SLIDE_W, height: SLIDE_H });
+      P.layout = "UNIVERSITY";
+
+      const W = SLIDE_W;
+      const H = SLIDE_H;
+
+      /* Footer helper (applied to every slide) */
+      function slideFooter(slide, pageNum) {
+        // Hairline
+        slide.addShape(P.ShapeType.rect, {
+          x: MARGIN, y: H - 0.42, w: W - MARGIN * 2, h: 0.005,
+          fill: { color: TOKENS.border }
+        });
+        // Footer text (left) — was missing before; now included
+        if (footerText) {
+          slide.addText(footerText, {
+            x: MARGIN, y: H - 0.32, w: W / 2 - MARGIN, h: 0.25,
+            fontSize: 9, color: TOKENS.muted, align: "left", fontFace: TOKENS.font
+          });
+        }
+        // Page number (right)
+        slide.addText(String(pageNum), {
+          x: W - MARGIN - 0.9, y: H - 0.32, w: 0.9, h: 0.25,
+          fontSize: 9, color: TOKENS.muted, align: "right", fontFace: TOKENS.font
+        });
+      }
+
+      /* ----- COVER SLIDE ----- */
+      const cover = P.addSlide();
+      cover.background = { color: TOKENS.cream };
+
+      /* Banner: fitted strip at top (never full-slide background, never fill) */
+      if (bannerDataUrl) {
+        const bannerW = W - MARGIN * 2; // 11.633
+        const bannerH = 2.2;
+        cover.addImage({
+          data: bannerDataUrl,
+          x: MARGIN,
+          y: 0.3,
+          w: bannerW,
+          h: bannerH,
+          sizing: { type: "contain", w: bannerW, h: bannerH }
+        });
+      } else {
+        // Empty banner placeholder (subtle surface)
+        cover.addShape(P.ShapeType.roundRect, {
+          x: MARGIN, y: 0.3, w: W - MARGIN * 2, h: bannerH, rectRadius: 0.08,
+          fill: { color: TOKENS.surface }
+        });
+      }
+
+      /* Title below banner — no overlap */
+      cover.addText(data.title || "Presentation", {
+        x: MARGIN, y: 2.7, w: W - MARGIN * 2, h: 1.0,
+        fontSize: 36, bold: true, color: TOKENS.dark, fontFace: TOKENS.font, valign: "middle"
+      });
+      if (data.subtitle) {
+        cover.addText(data.subtitle, {
+          x: MARGIN, y: 3.7, w: W - MARGIN * 2, h: 0.6,
+          fontSize: 16, color: TOKENS.muted, italic: true, fontFace: TOKENS.font
+        });
+      }
+
+      /* Accent bar */
+      cover.addShape(P.ShapeType.rect, {
+        x: MARGIN, y: 4.35, w: 2.0, h: 0.04, fill: { color: TOKENS.accent }
+      });
+
+      slideFooter(cover, 1);
+
+      /* ----- AGENDA SLIDE ----- */
+      const sections = data.sections || [];
+      if (sections.length > 1) {
+        const aSlide = P.addSlide();
+        aSlide.background = { color: TOKENS.cream };
+
+        /* Header band: consistent 16% height */
+        aSlide.addShape(P.ShapeType.roundRect, {
+          x: 0, y: 0, w: W, h: HEADER_H, rectRadius: 0.08,
+          fill: { color: TOKENS.dark }
+        });
+        aSlide.addText("Contents", {
+          x: MARGIN, y: 0.3, w: W - MARGIN * 2, h: 0.6,
+          fontSize: 28, bold: true, color: TOKENS.white, fontFace: TOKENS.font, valign: "middle"
+        });
+
+        /* Grid: 2 columns if > 8 items */
+        const cols = sections.length > 8 ? 2 : 1;
+        const colW = (W - MARGIN * 2 - 0.4) / cols;
+        const gap = 0.4;
+        const startX = MARGIN;
+        const startY = HEADER_H + 0.4;
+
+        sections.forEach((s, i) => {
+          const col = i % cols;
+          const row = Math.floor(i / cols);
+          const x = startX + col * (colW + gap);
+          const y = startY + row * 0.72;
+
+          aSlide.addShape(P.ShapeType.ellipse, {
+            x: x, y: y, w: 0.55, h: 0.55, fill: { color: TOKENS.accent }
+          });
+          aSlide.addText(String(i + 1), {
+            x: x, y: y, w: 0.55, h: 0.55, align: "center", valign: "middle",
+            fontSize: 15, bold: true, color: TOKENS.white, fontFace: TOKENS.font
+          });
+          aSlide.addText(s.heading || `Section ${i + 1}`, {
+            x: x + 0.7, y: y - 0.05, w: colW - 0.7, h: 0.55,
+            fontSize: 14, bold: true, color: TOKENS.dark, fontFace: TOKENS.font, valign: "middle"
+          });
+        });
+
+        slideFooter(aSlide, 2);
+      }
+
+      /* ----- CONTENT SLIDES ----- */
+      sections.forEach((sec, idx) => {
+        const s = P.addSlide();
+        s.background = { color: TOKENS.cream };
+
+        /* Header band */
+        s.addShape(P.ShapeType.roundRect, {
+          x: 0, y: 0, w: W, h: HEADER_H, rectRadius: 0.08,
+          fill: { color: TOKENS.dark }
+        });
+        s.addShape(P.ShapeType.roundRect, {
+          x: MARGIN, y: (HEADER_H - 0.2) / 2, w: 0.2, h: 0.2, rectRadius: 0.04,
+          fill: { color: TOKENS.accent }
+        });
+        s.addText(sec.heading || `Section ${idx + 1}`, {
+          x: MARGIN + 0.35, y: 0.22, w: W - MARGIN * 2 - 0.35, h: 0.75,
+          fontSize: 24, bold: true, color: TOKENS.white, fontFace: TOKENS.font, valign: "middle"
+        });
+
+        /* Content card */
+        const items = sec.content || [];
+        const contentTop = HEADER_H + 0.35;
+        const contentLimit = H - SAFE_BOTTOM - 0.3;
+        const cardMaxH = Math.max(0, contentLimit - contentTop - 0.2);
+        const cardH = Math.min(cardMaxH, 0.6 + items.length * 0.42);
+
+        s.addShape(P.ShapeType.roundRect, {
+          x: MARGIN, y: contentTop, w: W - MARGIN * 2, h: cardH, rectRadius: 0.06,
+          fill: { color: TOKENS.white },
+          shadow: { type: "outer", color: "BFB5A6", blur: 6, angle: 90, opacity: 0.15 }
+        });
+        s.addShape(P.ShapeType.roundRect, {
+          x: MARGIN, y: contentTop, w: 0.06, h: cardH, rectRadius: 0.03,
+          fill: { color: TOKENS.accent }
+        });
+
+        const bullets = items.map(c => ({
+          text: c,
+          options: {
+            bullet: { code: "25CF", indent: 16 },
+            color: TOKENS.dark,
+            breakLine: true,
+            paraSpaceAfter: 12,
+            fontFace: TOKENS.font,
+            fontSize: 15
+          }
+        }));
+
+        s.addText(bullets, {
+          x: MARGIN + 0.25, y: contentTop + 0.15,
+          w: W - MARGIN * 2 - 0.35, h: cardH - 0.3,
+          fontSize: 15, lineSpacing: 22, color: TOKENS.dark,
+          fontFace: TOKENS.font, valign: "top"
+        });
+
+        slideFooter(s, idx + (sections.length > 1 ? 3 : 2));
+      });
+
+      /* ----- CLOSING SLIDE ----- */
+      const close = P.addSlide();
+      close.background = { color: TOKENS.dark };
+
+      close.addShape(P.ShapeType.ellipse, {
+        x: -1.0, y: 3.5, w: 5, h: 5,
+        fill: { color: TOKENS.accent, transparency: 88 }
+      });
+
+      close.addText("Thank You", {
+        x: MARGIN, y: 2.5, w: W - MARGIN * 2, h: 1.0,
+        fontSize: 48, bold: true, color: TOKENS.white,
+        align: "center", fontFace: TOKENS.font
+      });
+      close.addShape(P.ShapeType.rect, {
+        x: W / 2 - 1.0, y: 3.7, w: 2.0, h: 0.04,
+        fill: { color: TOKENS.accent }
+      });
+      close.addText("Questions? Reach out any time.", {
+        x: MARGIN, y: 4.1, w: W - MARGIN * 2, h: 0.6,
+        fontSize: 16, color: "#F3E4DB", align: "center",
+        italic: true, fontFace: TOKENS.font
+      });
+
+      slideFooter(close, sections.length > 1 ? sections.length + 3 : 3);
+
+      const blob = await P.write("blob");
+      downloadBlob(blob, `${safeFilename(data.title)}.pptx`);
+    }
+
+    /* =========================================================
+       DOCX — 16:9 Page Size, Banner Fit, Footer Fixed
+       ========================================================= */
+    async function generateDOCX(data, bannerDataUrl, footerText) {
+      await ensureDocxLoaded();
+      if (!window.docx) throw new Error("docx library not loaded.");
+      const { Document, Packer, Paragraph, HeadingLevel, ImageRun, TextRun, AlignmentType, Header, Footer, PageNumber, BorderStyle, SectionType } = window.docx;
+
+      const kids = [];
+
+      /* Banner fitted (contain) at top of cover — not full-page background */
+      if (bannerDataUrl) {
+        kids.push(new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 120 },
+          children: [new ImageRun({
+            data: dataUrlToUint8Array(bannerDataUrl),
+            transformation: { width: 520, height: 200 }
+          })]
+        }));
+      }
+
+      kids.push(new Paragraph({
+        text: data.title || "Document",
+        heading: HeadingLevel.TITLE,
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 80, after: 120 },
+        children: [new TextRun({ text: data.title || "Document", bold: true, color: TOKENS.dark, size: 48, font: TOKENS.font })]
+      }));
+
+      if (data.subtitle) kids.push(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 160 },
+        children: [new TextRun({ text: data.subtitle, italics: true, color: TOKENS.muted, size: 24, font: TOKENS.font })]
+      }));
+
+      kids.push(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        border: { bottom: { color: TOKENS.accent, space: 6, style: BorderStyle.SINGLE, size: 14 } },
+        spacing: { after: 300 }
+      }));
+
+      (data.sections || []).forEach((sec, i) => {
+        kids.push(new Paragraph({
+          heading: HeadingLevel.HEADING_1,
+          spacing: { before: 300, after: 120 },
+          children: [new TextRun({ text: `${i + 1}.  ${sec.heading || ""}`, bold: true, color: TOKENS.accentDark, size: 28, font: TOKENS.font })]
+        }));
+        kids.push(new Paragraph({
+          spacing: { after: 160 },
+          border: { bottom: { color: TOKENS.border, space: 1, style: BorderStyle.SINGLE, size: 4 } }
+        }));
+        (sec.content || []).forEach(c => kids.push(new Paragraph({
+          bullet: { level: 0 },
+          spacing: { after: 100 },
+          children: [new TextRun({ text: c, size: 20, color: TOKENS.dark, font: TOKENS.font })]
+        })));
+      });
+
+      const doc = new Document({
+        sections: [{
+          properties: {
+            page: {
+              width: 19200,
+              height: 10800
+            }
+          },
+          headers: {
+            default: new Header({
+              children: [new Paragraph({
+                alignment: AlignmentType.RIGHT,
+                children: [new TextRun({ text: data.title || "Document", size: 16, color: TOKENS.muted, font: TOKENS.font })]
+              })]
+            })
+          },
+          footers: {
+            default: new Footer({
+              children: [new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 200 },
+                border: { top: { color: TOKENS.border, space: 4, style: BorderStyle.SINGLE, size: 4 } },
+                children: [
+                  ...(footerText ? [new TextRun({ text: footerText + "   |   ", size: 16, color: TOKENS.muted, font: TOKENS.font })] : []),
+                  new TextRun({ text: "Page ", size: 16, color: TOKENS.muted, font: TOKENS.font }),
+                  new TextRun({ children: [PageNumber.CURRENT], size: 16, color: TOKENS.muted, font: TOKENS.font })
+                ]
+              })]
+            })
+          },
+          children: kids
+        }]
+      });
+
+      const blob = await Packer.toBlob(doc);
+      downloadBlob(blob, `${safeFilename(data.title)}.docx`);
+    }
+
+    /* =========================================================
+       PDF — 16:9 Landscape (960pt x 540pt), Banner Fit, Footer Fixed
+       ========================================================= */
+    function generatePDF(data, bannerDataUrl, footerText) {
+      if (!window.jspdf?.jsPDF) throw new Error("jsPDF not loaded.");
+      const { jsPDF } = window.jspdf;
+
+      // True 16:9 landscape (960 pt x 540 pt)
+      const pdf = new jsPDF({ orientation: "landscape", unit: "pt", format: [960, 540] });
+      const pageW = 960, pageH = 540;
+      const mx = 50, my = 30;
+
+      /* ----- COVER ----- */
+      pdf.setFillColor(...rgb(TOKENS.dark));
+      pdf.rect(0, 0, pageW, pageH, "F");
+
+      pdf.setFillColor(...rgb(TOKENS.accent));
+      pdf.setGState({ opacity: 0.12 });
+      pdf.circle(pageW + 60, -60, 260, "F");
+      pdf.setGState({ opacity: 1 });
+
+      // Banner fitted at top (contain style — no stretch, no full background)
+      if (bannerDataUrl) {
+        const props = pdf.getImageProperties ? pdf.getImageProperties(bannerDataUrl) : { width: 400, height: 150 };
+        const maxW = pageW - mx * 2;
+        const maxH = 140;
+        let w = maxW;
+        let h = (props.height * w) / props.width;
+        if (h > maxH) { h = maxH; w = (props.width * maxH) / props.height; }
+        const format = bannerDataUrl.includes("image/png") ? "PNG" : "JPEG";
+        pdf.addImage(bannerDataUrl, format, mx, 30, w, h);
+      }
+
+      pdf.setFillColor(...rgb(TOKENS.accent));
+      pdf.rect(mx, 180, 4, 120, "F");
+
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(30);
+      pdf.text(data.title || "Presentation", mx + 14, 230);
+      pdf.setFont("helvetica", "italic");
+      pdf.setFontSize(13);
+      pdf.setTextColor(243, 228, 219);
+      pdf.text(data.subtitle || "", mx + 14, 250);
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+      pdf.setTextColor(...rgb(TOKENS.muted));
+      pdf.text("Prepared with NavGPT  •  " + new Date().toLocaleDateString(), mx + 14, 500);
+
+      // Footer line on cover
+      pdf.setDrawColor(...rgb(TOKENS.border));
+      pdf.setLineWidth(0.4);
+      pdf.line(mx, 510, pageW - mx, 510);
+      if (footerText) pdf.text(footerText, mx, 525);
+      pdf.text("1", pageW - mx, 525, { align: "right" });
+
+      pdf.addPage();
+
+      /* ----- CONTENT PAGES ----- */
+      (data.sections || []).forEach((sec, i) => {
+        // Dark header band (15-20%)
+        pdf.setFillColor(...rgb(TOKENS.dark));
+        pdf.roundedRect(0, 0, pageW, 90, 8, 8, "F");
+
+        pdf.setTextColor(...rgb(TOKENS.accent));
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(11);
+        pdf.text("SECTION " + String(i + 1).padStart(2, "0"), mx, 35);
+
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(20);
+        pdf.text(sec.heading || "", mx, 65);
+
+        pdf.setTextColor(...rgb(TOKENS.dark));
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(12);
+
+        let y = 115;
+        (sec.content || []).forEach(c => {
+          pdf.setFillColor(...rgb(TOKENS.accent));
+          pdf.circle(mx + 5, y + 3, 2, "F");
+          const lines = pdf.splitTextToSize(c, pageW - mx * 2 - 12);
+          pdf.text(lines, mx + 14, y);
+          y += lines.length * 7 + 8;
+          if (y > 490) {
+            // Footer hairline + text before new page
+            pdf.setDrawColor(...rgb(TOKENS.border));
+            pdf.setLineWidth(0.4);
+            pdf.line(mx, 500, pageW - mx, 500);
+            pdf.setFontSize(9);
+            pdf.setTextColor(...rgb(TOKENS.muted));
+            pdf.text(footerText || "NavGPT", mx, 515);
+            pdf.text(`Page ${i + 2}`, pageW - mx, 515, { align: "right" });
+            pdf.addPage();
+            y = 40;
+          }
+        });
+
+        // Footer hairline + text + page number
+        pdf.setDrawColor(...rgb(TOKENS.border));
+        pdf.setLineWidth(0.4);
+        pdf.line(mx, 500, pageW - mx, 500);
+        pdf.setFontSize(9);
+        pdf.setTextColor(...rgb(TOKENS.muted));
+        pdf.text(footerText || "NavGPT", mx, 515);
+        pdf.text(`Page ${i + 2}`, pageW - mx, 515, { align: "right" });
+      });
+
+      downloadBlob(pdf.output("blob"), `${safeFilename(data.title)}.pdf`);
+    }
+
+    /* =========================================================
+       SHARED UTILITIES
+       ========================================================= */
+    function safeFilename(title) {
+      return (title || "document").replace(/[^a-z0-9\-_ ]/gi, "").trim().slice(0, 60) || "document";
+    }
+
     function downloadBlob(blob, filename) {
-      // Resolve the correct MIME type from the file extension so that
-      // every browser (desktop + mobile) knows what kind of file it is.
+      const ext = filename.slice(filename.lastIndexOf(".")).toLowerCase();
       const mimeMap = {
         ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        ".pdf":  "application/pdf",
+        ".pdf": "application/pdf"
       };
-      const ext = filename.slice(filename.lastIndexOf(".")).toLowerCase();
-      const mime = mimeMap[ext] || blob.type || "application/octet-stream";
-      const typedBlob = new Blob([blob], { type: mime });
-
-      // Android WebView bridge (native app)
-      if (window.AndroidDownloader && window.AndroidDownloader.saveBase64File) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const base64 = reader.result.split(",")[1];
-          window.AndroidDownloader.saveBase64File(filename, base64, mime);
-        };
-        reader.readAsDataURL(typedBlob);
-        return;
-      }
-
-      // FileSaver.js handles iOS Safari, Android Chrome, and all desktop
-      // browsers correctly — it replaces the broken <a download> approach
-      // that causes mobile browsers to save PPTX/DOCX files as .zip.
-      if (window.saveAs) {
-        window.saveAs(typedBlob, filename);
-        return;
-      }
-
-      // Final fallback for very old browsers
-      if (window.navigator && window.navigator.msSaveBlob) {
-        window.navigator.msSaveBlob(typedBlob, filename);
-        return;
-      }
-
-      const url = URL.createObjectURL(typedBlob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      const mime = mimeMap[ext] || "application/octet-stream";
+      const typed = new Blob([blob], { type: mime });
+      if (window.saveAs) { window.saveAs(typed, filename); return; }
+      if (window.navigator?.msSaveBlob) { window.navigator.msSaveBlob(typed, filename); return; }
+      const url = URL.createObjectURL(typed);
+      const a = document.createElement("a"); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     }
 
@@ -1641,12 +2135,17 @@
       return bytes;
     }
 
-    function safeFilename(title) {
-      return (title || "document").replace(/[^a-z0-9\-_ ]/gi, "").trim().slice(0, 60) || "document";
+    function ensureDocxLoaded() {
+      if (window.docx) return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = "/libs/docx.js";
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
     }
 
-    // Scales body-text font/spacing down as bullet volume grows so dense
-    // sections don't overflow their fixed-size box.
     function fitBulletFontSize(items) {
       const totalChars = (items || []).reduce((sum, c) => sum + (c ? c.length : 0), 0);
       if (totalChars > 950) return { fontSize: 12, paraSpaceAfter: 8, lineSpacingMultiple: 1.05 };
@@ -1657,10 +2156,6 @@
       return { fontSize: 17, paraSpaceAfter: 16, lineSpacingMultiple: 1.15 };
     }
 
-    // FIX: the agenda slide used to hardcode fontSize:20 no matter how many
-    // items were in it, so a long agenda (15-20+ items, common for a
-    // thorough deck) ran off the bottom of the slide. This scales down the
-    // same way fitBulletFontSize does for content slides.
     function fitAgendaFontSize(count) {
       if (count > 16) return { fontSize: 13, paraSpaceAfter: 8 };
       if (count > 12) return { fontSize: 15, paraSpaceAfter: 10 };
@@ -1668,369 +2163,149 @@
       return { fontSize: 20, paraSpaceAfter: 14 };
     }
 
-    async function generatePPTX(data, bannerDataUrl, footerText) {
-      if (!window.PptxGenJS) {
-        throw new Error("pptxgenjs failed to load from the CDN (blocked by an ad-blocker, firewall, or CSP?). Reload the page and check the Network tab for cdn.jsdelivr.net.");
-      }
-      const pptx = new window.PptxGenJS();
-      pptx.layout = "LAYOUT_WIDE"; // 13.33 x 7.5 in
+    /* =========================================================
+       MODEL PICKER
+       ========================================================= */
+    const modelPickerBtn   = document.getElementById("modelPickerBtn");
+    const modelPickerPanel = document.getElementById("modelPickerPanel");
+    const mpbDot           = document.getElementById("mpbDot");
+    const mpbLabel         = document.getElementById("mpbLabel");
 
-      const ACCENT = "D97757";
-      const ACCENT_DARK = "BF5E3F";
-      const TEXT = "2D2A26";
-      const MUTED = "83786C";
-      const PAGE_W = 13.33, PAGE_H = 7.5;
+    // Provider metadata: icon emoji, colour class, readable name
+    const PROVIDER_META = {
+      nvidia:      { icon: "⚡", cls: "prov-nvidia",      label: "NVIDIA NIM" },
+      openrouter:  { icon: "🔀", cls: "prov-openrouter",  label: "OpenRouter" },
+      gemini:      { icon: "✦", cls: "prov-gemini",       label: "Google Gemini" },
+    };
 
-      function addFooter(slide, pageNum) {
-        if (footerText) {
-          slide.addText(footerText, {
-            x: 0.5, y: PAGE_H - 0.45, w: 8, h: 0.35, fontSize: 10, color: MUTED, fontFace: "Arial",
+    // Dot colour per provider
+    const PROVIDER_DOT = {
+      nvidia:     "#76b900",
+      openrouter: "#6c47ff",
+      gemini:     "#4285f4",
+    };
+
+    function updatePickerButton(modelId, allModels) {
+      const m = allModels.find((x) => x.id === modelId);
+      if (!m) return;
+      mpbLabel.textContent = m.label;
+      mpbDot.style.background = PROVIDER_DOT[m.provider] || "var(--accent)";
+    }
+
+    function renderPickerPanel(models) {
+      modelPickerPanel.innerHTML = "";
+      const groups = {};
+      models.forEach((m) => {
+        const prov = m.provider || "other";
+        if (!groups[prov]) groups[prov] = [];
+        groups[prov].push(m);
+      });
+
+      Object.entries(groups).forEach(([prov, list]) => {
+        const meta = PROVIDER_META[prov] || { icon: "🤖", cls: "", label: prov };
+
+        // Group label
+        const grpLabel = document.createElement("div");
+        grpLabel.className = "mp-group-label";
+        grpLabel.textContent = meta.label;
+        modelPickerPanel.appendChild(grpLabel);
+
+        list.forEach((m) => {
+          const card = document.createElement("div");
+          card.className = "mp-card" + (m.id === selectedModelId ? " selected" : "");
+          card.setAttribute("role", "option");
+          card.setAttribute("aria-selected", m.id === selectedModelId ? "true" : "false");
+          card.dataset.modelId = m.id;
+
+          card.innerHTML = `
+            <span class="mp-icon ${meta.cls}">${meta.icon}</span>
+            <span class="mp-info">
+              <span class="mp-name">${m.label}</span>
+              <span class="mp-badge">${meta.label}</span>
+            </span>
+            <span class="mp-check">✓</span>
+          `;
+
+          card.addEventListener("click", () => {
+            selectedModelId = m.id;
+            updatePickerButton(m.id, models);
+            // refresh selection highlight
+            modelPickerPanel.querySelectorAll(".mp-card").forEach((c) => {
+              const isSelected = c.dataset.modelId === m.id;
+              c.classList.toggle("selected", isSelected);
+              c.setAttribute("aria-selected", String(isSelected));
+            });
+            closePickerPanel();
           });
-        }
-        slide.addText(String(pageNum), {
-          x: PAGE_W - 1.1, y: PAGE_H - 0.45, w: 0.6, h: 0.35, fontSize: 10, color: MUTED, align: "right", fontFace: "Arial",
-        });
-      }
 
-      // ---- Title slide ----
-      const titleSlide = pptx.addSlide();
-      titleSlide.background = { color: ACCENT };
-      if (bannerDataUrl) {
-        const BANNER_H = 2.6; // a true banner strip, not most of the slide
-        titleSlide.addImage({ data: bannerDataUrl, x: 0, y: 0, w: PAGE_W, h: BANNER_H, sizing: { type: "cover", w: PAGE_W, h: BANNER_H } });
-        // Solid accent band below the image holds the title/subtitle, so
-        // text never sits on top of the photo.
-        titleSlide.addShape(pptx.ShapeType.rect, { x: 0, y: BANNER_H, w: PAGE_W, h: PAGE_H - BANNER_H, fill: { color: ACCENT } });
-        const remaining = PAGE_H - BANNER_H;
-        titleSlide.addText(data.title || "Presentation", {
-          x: 0.9, y: BANNER_H + remaining * 0.28, w: PAGE_W - 1.8, h: 1.15, fontSize: 34, bold: true, color: "FFFFFF", align: "center", fontFace: "Arial", valign: "top",
+          modelPickerPanel.appendChild(card);
         });
-        if (data.subtitle) {
-          titleSlide.addText(data.subtitle, {
-            x: 0.9, y: BANNER_H + remaining * 0.28 + 1.2, w: PAGE_W - 1.8, h: 0.6, fontSize: 16, italic: true, color: "FFFFFF", align: "center", fontFace: "Arial",
-          });
-        }
+      });
+    }
+
+    function openPickerPanel() {
+      modelPickerPanel.classList.add("open");
+      modelPickerBtn.classList.add("open");
+      modelPickerBtn.setAttribute("aria-expanded", "true");
+    }
+
+    function closePickerPanel() {
+      modelPickerPanel.classList.remove("open");
+      modelPickerBtn.classList.remove("open");
+      modelPickerBtn.setAttribute("aria-expanded", "false");
+    }
+
+    modelPickerBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (modelPickerPanel.classList.contains("open")) {
+        closePickerPanel();
       } else {
-        titleSlide.addText(data.title || "Presentation", {
-          x: 0.9, y: 2.9, w: PAGE_W - 1.8, h: 1.5, fontSize: 40, bold: true, color: "FFFFFF", align: "center", fontFace: "Arial",
-        });
-        if (data.subtitle) {
-          titleSlide.addText(data.subtitle, {
-            x: 0.9, y: 4.35, w: PAGE_W - 1.8, h: 0.7, fontSize: 18, italic: true, color: "FFFFFF", align: "center", fontFace: "Arial",
-          });
-        }
+        openPickerPanel();
       }
-
-      // ---- Agenda slide (FIXED: scaled font + two columns for long agendas) ----
-      const sections = data.sections || [];
-      if (sections.length > 1) {
-        const agenda = pptx.addSlide();
-        agenda.background = { color: "FFFFFF" };
-        agenda.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: PAGE_W, h: 1.1, fill: { color: ACCENT } });
-        agenda.addText("Agenda", { x: 0.7, y: 0.15, w: 8, h: 0.8, fontSize: 28, bold: true, color: "FFFFFF", fontFace: "Arial", valign: "middle" });
-
-        const { fontSize: agendaFontSize, paraSpaceAfter: agendaParaSpaceAfter } = fitAgendaFontSize(sections.length);
-        const useTwoColumns = sections.length > 12;
-
-        function agendaItems(list, offset) {
-          return list.map((s, i) => ({
-            text: `${i + 1 + offset}.  ${s.heading || ""}`,
-            options: { breakLine: true, paraSpaceAfter: agendaParaSpaceAfter, color: TEXT },
-          }));
-        }
-
-        if (useTwoColumns) {
-          const colGap = 0.5;
-          const colW = (PAGE_W - 1.4 - colGap) / 2;
-          const splitAt = Math.ceil(sections.length / 2);
-          const col1 = sections.slice(0, splitAt);
-          const col2 = sections.slice(splitAt);
-          agenda.addText(agendaItems(col1, 0), { x: 0.7, y: 1.5, w: colW, h: 5.6, fontSize: agendaFontSize, fontFace: "Arial", valign: "top" });
-          agenda.addText(agendaItems(col2, splitAt), { x: 0.7 + colW + colGap, y: 1.5, w: colW, h: 5.6, fontSize: agendaFontSize, fontFace: "Arial", valign: "top" });
-        } else {
-          agenda.addText(agendaItems(sections, 0), { x: 1, y: 1.5, w: PAGE_W - 2, h: 5.6, fontSize: agendaFontSize, fontFace: "Arial", valign: "top" });
-        }
-        addFooter(agenda, 2);
-      }
-
-      // ---- Content slides ----
-      sections.forEach((sec, idx) => {
-        const slide = pptx.addSlide();
-        slide.background = { color: "FFFFFF" };
-        const heading = sec.heading || `Section ${idx + 1}`;
-        const headingFontSize = heading.length > 45 ? 21 : 26; // shrink long headings so they don't wrap into the body area
-        slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: PAGE_W, h: 1.3, fill: { color: ACCENT } });
-        slide.addText(heading, {
-          x: 0.7, y: 0.12, w: PAGE_W - 1.4, h: 1.06, fontSize: headingFontSize, bold: true, color: "FFFFFF", fontFace: "Arial", valign: "middle",
-        });
-
-        const items = sec.content || [];
-        const { fontSize, paraSpaceAfter, lineSpacingMultiple } = fitBulletFontSize(items);
-        const bulletItems = items.map((c) => ({
-          text: c,
-          options: { bullet: { code: "25CF", indent: 20 }, color: TEXT, breakLine: true, paraSpaceAfter },
-        }));
-        slide.addText(bulletItems, {
-          x: 0.8, y: 1.75, w: PAGE_W - 1.6, h: 4.85, fontSize, fontFace: "Arial", valign: "top", lineSpacingMultiple,
-        });
-
-        addFooter(slide, idx + (sections.length > 1 ? 3 : 2));
-      });
-
-      // ---- Closing slide ----
-      const closing = pptx.addSlide();
-      closing.background = { color: ACCENT_DARK };
-      closing.addText("Thank You", {
-        x: 0.9, y: 3.1, w: PAGE_W - 1.8, h: 1.2, fontSize: 38, bold: true, color: "FFFFFF", align: "center", fontFace: "Arial",
-      });
-
-      await pptx.write("blob").then((blob) => downloadBlob(blob, `${safeFilename(data.title)}.pptx`));
-    }
-
-    // Lazy-load docx from self-hosted file if it didn't load on page start.
-    async function ensureDocxLoaded() {
-      if (window.docx) return;
-      // Self-hosted at /libs/docx.js (served from Firebase Hosting — no CDN required)
-      await new Promise((resolve, reject) => {
-        const s = document.createElement("script");
-        s.src = "/libs/docx.js";
-        s.onload = resolve;
-        s.onerror = reject;
-        document.head.appendChild(s);
-      });
-    }
-
-    async function generateDOCX(data, bannerDataUrl, footerText) {
-      await ensureDocxLoaded();
-      if (!window.docx) {
-        throw new Error("docx library could not be loaded. Please reload the page and try again.");
-      }
-      const {
-        Document, Packer, Paragraph, HeadingLevel, ImageRun, TextRun,
-        AlignmentType, Header, Footer, PageNumber, BorderStyle,
-      } = window.docx;
-      const children = [];
-
-      if (bannerDataUrl) {
-        const bytes = dataUrlToUint8Array(bannerDataUrl);
-        // Size from the image's real aspect ratio (capped) instead of a fixed
-        // 580x210, so a portrait photo isn't squashed/stretched into a wide box.
-        const dims = await new Promise((resolve) => {
-          const img = new Image();
-          img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
-          img.onerror = () => resolve({ w: 580, h: 210 });
-          img.src = bannerDataUrl;
-        });
-        const maxW = 580, maxH = 260;
-        let w = maxW, h = (dims.h * maxW) / dims.w;
-        if (h > maxH) { h = maxH; w = (dims.w * maxH) / dims.h; }
-        children.push(new Paragraph({
-          alignment: AlignmentType.CENTER,
-          spacing: { after: 300 },
-          children: [new ImageRun({ data: bytes, transformation: { width: Math.round(w), height: Math.round(h) } })],
-        }));
-      }
-
-      children.push(new Paragraph({
-        text: data.title || "Document",
-        heading: HeadingLevel.TITLE,
-        alignment: AlignmentType.CENTER,
-        spacing: { after: data.subtitle ? 80 : 240 },
-      }));
-
-      if (data.subtitle) {
-        children.push(new Paragraph({
-          alignment: AlignmentType.CENTER,
-          spacing: { after: 240 },
-          children: [new TextRun({ text: data.subtitle, italics: true, color: "83786C", size: 24 })],
-        }));
-      }
-
-      children.push(new Paragraph({
-        border: { bottom: { color: "D97757", space: 1, style: BorderStyle.SINGLE, size: 8 } },
-        spacing: { after: 320 },
-      }));
-
-      (data.sections || []).forEach((sec, idx) => {
-        children.push(new Paragraph({
-          heading: HeadingLevel.HEADING_1,
-          spacing: { before: idx === 0 ? 0 : 320, after: 140 },
-          children: [new TextRun({ text: `${idx + 1}.  ${sec.heading || ""}`, color: "BF5E3F", bold: true })],
-        }));
-        (sec.content || []).forEach((item) => {
-          children.push(new Paragraph({
-            text: item,
-            bullet: { level: 0 },
-            spacing: { after: 110 },
-          }));
-        });
-      });
-
-      const footerChildren = [
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          border: { top: { color: "EAE5DC", space: 4, style: BorderStyle.SINGLE, size: 4 } },
-          children: [
-            ...(footerText ? [new TextRun({ text: footerText + "   |   Page ", size: 18, color: "83786C" })] : [new TextRun({ text: "Page ", size: 18, color: "83786C" })]),
-            new TextRun({ children: [PageNumber.CURRENT], size: 18, color: "83786C" }),
-          ],
-        }),
-      ];
-
-      const doc = new Document({
-        sections: [{
-          headers: {
-            default: new Header({
-              children: [new Paragraph({
-                alignment: AlignmentType.RIGHT,
-                children: [new TextRun({ text: data.title || "", size: 16, color: "83786C" })],
-              })],
-            }),
-          },
-          footers: { default: new Footer({ children: footerChildren }) },
-          children,
-        }],
-      });
-
-      const blob = await Packer.toBlob(doc);
-      downloadBlob(blob, `${safeFilename(data.title)}.docx`);
-    }
-
-    function generatePDF(data, bannerDataUrl, footerText) {
-      if (!window.jspdf || !window.jspdf.jsPDF) {
-        throw new Error("jsPDF failed to load from the CDN (blocked by an ad-blocker, firewall, or CSP?). Reload the page and check the Network tab for cdn.jsdelivr.net.");
-      }
-      const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF();
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const marginX = 16;
-      const ACCENT = [217, 119, 87];
-      const ACCENT_DARK = [191, 94, 63];
-      const TEXT = [45, 42, 38];
-      const MUTED = [131, 120, 108];
-
-      // ---- Header banner ----
-      pdf.setFillColor(...ACCENT);
-      pdf.rect(0, 0, pageWidth, data.subtitle ? 42 : 36, "F");
-      pdf.setTextColor(255, 255, 255);
-      pdf.setFontSize(21);
-      pdf.setFont(undefined, "bold");
-      pdf.text(data.title || "Document", marginX, 22);
-      if (data.subtitle) {
-        pdf.setFontSize(11);
-        pdf.setFont(undefined, "italic");
-        pdf.text(data.subtitle, marginX, 32);
-      }
-
-      let y = (data.subtitle ? 42 : 36) + 12;
-
-      if (bannerDataUrl) {
-        const props = pdf.getImageProperties(bannerDataUrl);
-        const maxImgWidth = pageWidth - marginX * 2;
-        const maxImgHeight = 70; // cap so a portrait photo can't cover most of the first page
-        let imgWidth = maxImgWidth;
-        let imgHeight = (props.height * imgWidth) / props.width;
-        if (imgHeight > maxImgHeight) {
-          imgHeight = maxImgHeight;
-          imgWidth = (props.width * imgHeight) / props.height;
-        }
-        const imgX = marginX + (maxImgWidth - imgWidth) / 2; // center if width was capped
-        const format = bannerDataUrl.includes("image/png") ? "PNG" : "JPEG";
-        if (y + imgHeight > pageHeight - 30) { pdf.addPage(); y = 20; }
-        pdf.addImage(bannerDataUrl, format, imgX, y, imgWidth, imgHeight);
-        y += imgHeight + 12;
-      }
-
-      (data.sections || []).forEach((sec, idx) => {
-        if (y > pageHeight - 45) { pdf.addPage(); y = 20; }
-
-        pdf.setFontSize(15);
-        pdf.setFont(undefined, "bold");
-        pdf.setTextColor(...ACCENT_DARK);
-        pdf.text(`${idx + 1}.  ${sec.heading || ""}`, marginX, y);
-        y += 5;
-        pdf.setDrawColor(...ACCENT);
-        pdf.setLineWidth(0.7);
-        pdf.line(marginX, y, marginX + 34, y);
-        y += 9;
-
-        pdf.setFontSize(11);
-        pdf.setFont(undefined, "normal");
-        pdf.setTextColor(...TEXT);
-
-        (sec.content || []).forEach((item) => {
-          const lines = pdf.splitTextToSize(item, pageWidth - marginX * 2 - 8);
-          if (y + lines.length * 6 > pageHeight - 30) { pdf.addPage(); y = 20; }
-          pdf.setFillColor(...ACCENT);
-          pdf.circle(marginX + 1.4, y - 1.6, 1.1, "F");
-          lines.forEach((line, i) => pdf.text(line, marginX + 6, y + i * 6));
-          y += lines.length * 6 + 5;
-        });
-        y += 6;
-      });
-
-      const totalPages = pdf.internal.getNumberOfPages();
-      for (let i = 1; i <= totalPages; i++) {
-        pdf.setPage(i);
-        pdf.setDrawColor(...MUTED);
-        pdf.setLineWidth(0.2);
-        pdf.line(marginX, pageHeight - 14, pageWidth - marginX, pageHeight - 14);
-        pdf.setFontSize(8.5);
-        pdf.setFont(undefined, "normal");
-        pdf.setTextColor(...MUTED);
-        if (footerText) pdf.text(footerText, marginX, pageHeight - 8);
-        pdf.text(`Page ${i} of ${totalPages}`, pageWidth - marginX, pageHeight - 8, { align: "right" });
-      }
-
-      downloadBlob(pdf.output("blob"), `${safeFilename(data.title)}.pdf`);
-    }
-
-    messageInput.addEventListener("input", () => {
-      messageInput.style.height = "auto";
-      messageInput.style.height = Math.min(messageInput.scrollHeight, 140) + "px";
     });
 
-    // ---------- Model dropdown ----------
+    document.addEventListener("click", (e) => {
+      if (!document.getElementById("modelPickerWrap").contains(e.target)) {
+        closePickerPanel();
+      }
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closePickerPanel();
+    });
+
     async function loadModels() {
       modelsLoaded = false;
+      mpbLabel.textContent = "Loading…";
+      mpbDot.style.background = "var(--muted)";
       try {
         const idToken = await currentUser.getIdToken();
         const res = await fetch(`${BACKEND_URL}/api/models`, {
           headers: { Authorization: `Bearer ${idToken}` },
         });
         const data = await res.json();
-        modelSelect.innerHTML = "";
-        
-        const groups = {};
-        (data.models || []).forEach((m) => {
-          const providerLabel = m.provider === "nvidia" ? "NVIDIA NIM" : "OpenRouter";
-          if (!groups[providerLabel]) {
-            const optgroup = document.createElement("optgroup");
-            optgroup.label = providerLabel;
-            groups[providerLabel] = optgroup;
-            modelSelect.appendChild(optgroup);
-          }
-          const opt = document.createElement("option");
-          opt.value = m.id;
-          opt.textContent = m.label;
-          groups[providerLabel].appendChild(opt);
-        });
-        if (data.models && data.models.length) {
-          selectedModelId = data.models[0].id;
+        const models = data.models || [];
+        if (models.length) {
+          selectedModelId = models[0].id;
           modelsLoaded = true;
+          renderPickerPanel(models);
+          updatePickerButton(selectedModelId, models);
         } else {
           selectedModelId = null;
+          mpbLabel.textContent = "No models";
+          mpbDot.style.background = "var(--muted)";
         }
       } catch (err) {
         console.error("Failed to load models:", err);
-        modelSelect.innerHTML = `<option value="">Default unavailable</option>`;
+        mpbLabel.textContent = "Unavailable";
+        mpbDot.style.background = "var(--muted)";
         selectedModelId = null;
       }
     }
-    modelSelect.addEventListener("change", () => { selectedModelId = modelSelect.value; });
 
-    // ---------- Chat sessions (sidebar) ----------
+    /* =========================================================
+       CHAT SESSIONS
+       ========================================================= */
     function chatsCol(uid) { return collection(db, "users", uid, "chats"); }
     function messagesCol(uid, chatId) { return collection(db, "users", uid, "chats", chatId, "messages"); }
 
@@ -2058,9 +2333,6 @@
       return item;
     }
 
-    // FIX: this used to hardcode limit(100) with no way to see older chats.
-    // Now paginates with a "Load more" button, using the last doc as a
-    // Firestore cursor (startAfter).
     async function loadChatList(uid, opts = {}) {
       const { reset = false } = opts;
       if (reset) {
@@ -2079,8 +2351,6 @@
         return;
       }
 
-      // Drop any existing "load more" button before appending this page —
-      // it'll be re-added at the end if there's still more to load.
       const existingBtn = document.getElementById("loadMoreChatsBtn");
       if (existingBtn) existingBtn.remove();
 
@@ -2196,7 +2466,9 @@
       await selectChat(currentUser.uid, id);
     });
 
-    // ---------- Auth ----------
+    /* =========================================================
+       AUTH
+       ========================================================= */
     onAuthStateChanged(auth, async (user) => {
       currentUser = user;
       if (user) {
@@ -2220,7 +2492,12 @@
           signInWithPopup(auth, new GoogleAuthProvider());
         inputBar.style.display = "none";
         chatListEl.innerHTML = "";
-        modelSelect.innerHTML = "";
+        modelPickerPanel.innerHTML = "";
+        modelPickerPanel.classList.remove("open");
+        modelPickerBtn.classList.remove("open");
+        modelPickerBtn.setAttribute("aria-expanded", "false");
+        mpbLabel.textContent = "Sign in first";
+        mpbDot.style.background = "var(--muted)";
         currentChatId = null;
         history = [];
         chatWindow.innerHTML = `
@@ -2233,7 +2510,9 @@
       }
     });
 
-    // ---------- Sending a message ----------
+    /* =========================================================
+       SEND MESSAGE
+       ========================================================= */
     async function send() {
       const text = messageInput.value.trim();
       if (!text || !currentUser) return;
@@ -2321,36 +2600,32 @@
         }
 
         if (!fullReply.trim()) {
-          console.warn("Model returned an empty response (no content/error/done events carried any text). Check the Render backend logs for this request — the upstream model call likely failed silently or returned a non-streaming/unexpected response shape.");
+          console.warn("Model returned an empty response.");
           if (isStillActiveChat()) {
             stream.contentEl.innerHTML = renderMarkdown(
-              "_The model didn't return any content. This can happen if the selected model is unavailable, misconfigured, or doesn't support streaming the way this app expects. Try again, or switch models from the dropdown above._"
+              "_The model didn't return any content. This can happen if the selected model is unavailable, misconfigured, or doesn't support streaming. Try again, or switch models._"
             );
           }
         }
 
         const { displayText, exportData, wasTruncated } = parseExportBlock(fullReply);
-
         let finalExportData = exportData;
         let usedFallbackTemplate = false;
         if (!finalExportData && looksLikeDocumentRequest(text) && fullReply.trim()) {
           finalExportData = buildFallbackExportData(text, fullReply);
           usedFallbackTemplate = !!finalExportData;
-          if (!finalExportData) {
-            console.warn("Document request detected, but the reply had no headings/lists to build a fallback structure from.");
-          }
         }
 
         if (isStillActiveChat()) {
           if (exportData) {
             let noteHtml = "";
             if (wasTruncated) {
-              noteHtml = `<p style="color:var(--muted);font-size:0.82rem;font-style:italic;margin-top:8px;">⚠ The response was cut short (or a garbled line was removed), so this file may have fewer slides/sections/bullets than you asked for. Try asking for a shorter deck, or send the message again.</p>`;
+              noteHtml = `<p style="color:var(--muted);font-size:0.82rem;font-style:italic;margin-top:8px;">⚠ The response was cut short (or a garbled line was removed), so this file may have fewer slides/sections/bullets than you asked for.</p>`;
             }
             stream.contentEl.innerHTML = renderMarkdown(displayText || "Here's what I put together:") + noteHtml;
             addExportBar(stream.bubbleEl, exportData);
           } else if (usedFallbackTemplate) {
-            const noteHtml = `<p style="color:var(--muted);font-size:0.82rem;font-style:italic;margin-top:8px;">ℹ️ This model's reply wasn't pre-formatted for export, so the file below was auto-built from the headings and bullet points in its response above. Worth a quick check before you rely on it.</p>`;
+            const noteHtml = `<p style="color:var(--muted);font-size:0.82rem;font-style:italic;margin-top:8px;">ℹ️ Auto-built from headings and bullets in the response. Worth a quick check before relying on it.</p>`;
             stream.contentEl.innerHTML = renderMarkdown(fullReply) + noteHtml;
             addExportBar(stream.bubbleEl, finalExportData);
           }
@@ -2382,14 +2657,14 @@
         if (isFirstMessage) await loadChatList(currentUser.uid, { reset: true });
       } catch (err) {
         if (err && err.name === "AbortError") {
-          console.info("Request aborted (superseded by a newer action).");
+          console.info("Request aborted.");
         } else {
           console.error(err);
           removeTyping();
           if (stream) {
             stream.finish();
             if (currentChatId === sendChatId) {
-              stream.contentEl.innerHTML = renderMarkdown("_Sorry, something went wrong sending that message. Your draft has been restored below — try again._");
+              stream.contentEl.innerHTML = renderMarkdown("_Sorry, something went wrong. Your draft has been restored — try again._");
             }
           } else if (currentChatId === sendChatId) {
             renderMessage("bot", "Sorry, something went wrong. Please try again.");

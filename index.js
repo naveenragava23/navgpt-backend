@@ -52,6 +52,10 @@ const OPENROUTER_EMBEDDING_URL = "https://openrouter.ai/api/v1/embeddings";
 // Set NVIDIA_API_KEY + NVIDIA_MODEL in Render's Environment tab.
 const NVIDIA_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
 
+// Google Gemini — REST streaming endpoint.
+// Set GEMINI_API_KEY + GEMINI_MODEL (e.g. gemini-2.5-flash) in Render's Environment tab.
+const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
+
 // Build a unified slot list. The NVIDIA slot (if configured) is listed first
 // so it becomes the default. Each slot carries a `provider` tag so runChat
 // knows which endpoint and extra params to use.
@@ -79,7 +83,23 @@ const _openrouterSlots = [1]
   }))
   .filter((m) => m.apiKey && m.model);
 
-const MODEL_SLOTS = [...(_nvidiaSlot ? [_nvidiaSlot] : []), ..._openrouterSlots];
+// Gemini slot — only added when GEMINI_API_KEY and GEMINI_MODEL are both set.
+const _geminiSlot =
+  process.env.GEMINI_API_KEY && process.env.GEMINI_MODEL
+    ? {
+      id: "gemini",
+      provider: "gemini",
+      apiKey: process.env.GEMINI_API_KEY,
+      model: process.env.GEMINI_MODEL,
+      label: process.env.GEMINI_LABEL || process.env.GEMINI_MODEL || "Gemini",
+    }
+    : null;
+
+const MODEL_SLOTS = [
+  ...(_nvidiaSlot ? [_nvidiaSlot] : []),
+  ..._openrouterSlots,
+  ...(_geminiSlot ? [_geminiSlot] : []),
+];
 
 function getModelSlot(modelId) {
   return MODEL_SLOTS.find((m) => m.id === modelId) || MODEL_SLOTS[0];
@@ -451,9 +471,10 @@ app.post("/api/chat", requireAuth, async (req, res) => {
 
 // The actual provider call + stream relay for a single job. Only ever
 // invoked by the queue once a concurrency slot is free.
-// Supports two providers:
+// Supports three providers:
 //   - "nvidia"     → NVIDIA NIM endpoint (direct, with thinking params)
-//   - "openrouter" → OpenRouter endpoint (default)
+//   - "openrouter" → OpenRouter endpoint
+//   - "gemini"     → Google Gemini REST streaming endpoint
 async function runChat({ req, res, send, userMessage, history, slot }) {
   // RAG retrieval — returns [] until documents are ingested, so this is a
   // no-op for now but wired up and ready.
@@ -489,8 +510,14 @@ async function runChat({ req, res, send, userMessage, history, slot }) {
     { role: "user", content: userMessage },
   ];
 
+  // =========================================================
+  // GEMINI provider branch
+  // =========================================================
+  if (slot.provider === "gemini") {
+    return runGeminiChat({ req, res, send, messages, slot });
+  }
 
-  // ---- Build provider-specific request ----
+  // ---- Build provider-specific request (NVIDIA / OpenRouter) ----
   const isNvidia = slot.provider === "nvidia";
   const apiUrl = isNvidia ? NVIDIA_API_URL : OPENROUTER_API_URL;
 
@@ -536,7 +563,7 @@ async function runChat({ req, res, send, userMessage, history, slot }) {
     return res.end();
   }
 
-  // ---- Stream relay — identical SSE format for both providers ----
+  // ---- Stream relay — identical SSE format for both NVIDIA / OpenRouter ----
   const reader = upstream.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -577,6 +604,112 @@ async function runChat({ req, res, send, userMessage, history, slot }) {
   } catch (err) {
     console.error("Stream read error:", err);
     send({ type: "error", message: "Stream interrupted." });
+  }
+
+  send({ type: "done" });
+  res.end();
+}
+
+// =========================================================
+// Google Gemini streaming chat
+// Converts the internal OpenAI-style messages array to Gemini's
+// `contents` format (role: "user"/"model", parts: [{text}]) and
+// streams the response via the REST SSE endpoint.
+// =========================================================
+async function runGeminiChat({ req, res, send, messages, slot }) {
+  // Separate the system prompt from conversation turns.
+  const systemMsg = messages.find((m) => m.role === "system");
+  const turns = messages.filter((m) => m.role !== "system");
+
+  // Convert turns to Gemini `contents` format.
+  // Gemini uses "model" instead of "assistant" for the AI role.
+  const contents = turns.map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }));
+
+  // Ensure the conversation starts with a user turn (Gemini requirement).
+  if (!contents.length || contents[0].role !== "user") {
+    contents.unshift({ role: "user", parts: [{ text: "Hello" }] });
+  }
+
+  const requestBody = {
+    contents,
+    ...(systemMsg && {
+      systemInstruction: { parts: [{ text: systemMsg.content }] },
+    }),
+    generationConfig: {
+      temperature: 1,
+      maxOutputTokens: 8192,
+    },
+  };
+
+  // ?alt=sse makes Gemini stream SSE chunks instead of a single JSON response.
+  const apiUrl = `${GEMINI_BASE_URL}/${encodeURIComponent(slot.model)}:streamGenerateContent?alt=sse&key=${slot.apiKey}`;
+
+  let upstream;
+  try {
+    console.log(`[${req.uid}] Calling Google Gemini with model ${slot.model}...`);
+    upstream = await fetch(apiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
+    console.log(`[${req.uid}] Gemini responded with status ${upstream.status}`);
+  } catch (err) {
+    console.error("Gemini request failed:", err);
+    send({ type: "error", message: "Could not reach Google Gemini." });
+    return res.end();
+  }
+
+  if (!upstream.ok || !upstream.body) {
+    const errText = await upstream.text().catch(() => "");
+    console.error("Gemini API error:", upstream.status, errText);
+    send({ type: "error", message: "Gemini model request failed." });
+    return res.end();
+  }
+
+  // ---- Stream relay for Gemini SSE chunks ----
+  const reader = upstream.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let contentCharsSent = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+        const data = trimmed.slice(5).trim();
+        if (!data || data === "[DONE]") continue;
+
+        try {
+          const parsed = JSON.parse(data);
+          // Gemini SSE shape: { candidates: [{ content: { parts: [{text}] } }] }
+          const parts = parsed?.candidates?.[0]?.content?.parts;
+          if (!Array.isArray(parts)) continue;
+          for (const part of parts) {
+            if (part.text) {
+              send({ type: "content", text: part.text });
+              contentCharsSent += part.text.length;
+            }
+          }
+        } catch {
+          // ignore malformed/partial chunk
+        }
+      }
+    }
+    console.log(`[${req.uid}] Gemini stream finished: ${contentCharsSent} content chars sent.`);
+  } catch (err) {
+    console.error("Gemini stream read error:", err);
+    send({ type: "error", message: "Gemini stream interrupted." });
   }
 
   send({ type: "done" });

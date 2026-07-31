@@ -83,15 +83,15 @@ const _openrouterSlots = [1]
   }))
   .filter((m) => m.apiKey && m.model);
 
-// Gemini slot — only added when GEMINI_API_KEY and GEMINI_MODEL are both set.
+// Gemini slot — added when GEMINI_API_KEY is set (defaults to gemini-3.6-flash).
 const _geminiSlot =
-  process.env.GEMINI_API_KEY && process.env.GEMINI_MODEL
+  process.env.GEMINI_API_KEY
     ? {
       id: "gemini",
       provider: "gemini",
       apiKey: process.env.GEMINI_API_KEY,
-      model: process.env.GEMINI_MODEL,
-      label: process.env.GEMINI_LABEL || process.env.GEMINI_MODEL || "Gemini",
+      model: process.env.GEMINI_MODEL || "gemini-3.6-flash",
+      label: process.env.GEMINI_LABEL || (process.env.GEMINI_MODEL ? `Gemini (${process.env.GEMINI_MODEL})` : "Gemini 3.6 Flash"),
     }
     : null;
 
@@ -109,7 +109,12 @@ function getModelSlot(modelId) {
 const EMBEDDING_API_KEY = process.env.OPENROUTER_EMBEDDING_API_KEY || _openrouterSlots[0]?.apiKey;
 const EMBEDDING_MODEL = process.env.OPENROUTER_EMBEDDING_MODEL || "openai/text-embedding-3-small";
 
-const SYSTEM_PROMPT = `You are NavGPT, a helpful and knowledgeable AI assistant. You can help with anything — answering questions, writing, coding, analysis, brainstorming, math, research, creative tasks, and more.
+// =====================================================================
+// SYSTEM PROMPTS — one per response mode
+// =====================================================================
+
+// General mode: the original NavGPT prompt (unchanged behaviour).
+const SYSTEM_PROMPT_GENERAL = `You are NavGPT, a helpful and knowledgeable AI assistant. You can help with anything — answering questions, writing, coding, analysis, brainstorming, math, research, creative tasks, and more.
 
 Be direct, clear, and genuinely useful. Match your tone to the conversation — casual when the user is casual, detailed and precise when the task requires it. Never refuse a reasonable request.
 
@@ -152,6 +157,75 @@ sparse content looks obviously unfinished. Follow these rules:
   gets cut off before closing.
 Do not add this code block for normal conversational replies — only when
 the user is clearly asking for a generatable document.`;
+
+// Student mode: story-first, analogy-driven, example-grounded explanations.
+const SYSTEM_PROMPT_STUDENT = `You are NavGPT in Student Mode — a friendly, patient tutor who makes every concept stick through real-world stories and vivid examples.
+
+## Core teaching philosophy
+- **Be clear and concise:** Give direct, easy-to-understand answers without unnecessary fluff or robotic transitions.
+- **Use real-world stories or analogies wisely:** When explaining a complex topic, use a relatable scenario, everyday object, or famous example to make it stick. Use "Imagine you're…" or "Think of it like…" framing if it helps, but skip it for simple factual questions.
+- **Explain concepts simply:** Introduce technical terms clearly, linking them back to everyday concepts.
+- **Provide concrete examples:** Use numbers, timelines, or short, practical examples when helpful.
+- **Focus on relevance:** Briefly mention why the concept matters in real life, but keep it brief.
+
+## Tone and style
+- Use simple, conversational language. Define jargon the moment you introduce it.
+- Use bold for key terms the first time they appear.
+- Keep paragraphs short (2-4 sentences). Use bullet points for readability.
+- Be encouraging, but avoid excessive filler text or fake enthusiasm. Answer directly and clearly.
+
+## Visual diagrams (Canvas images)
+When a visual diagram, chart, flowchart, or illustration would meaningfully help the student understand the concept, include EXACTLY ONE fenced code block labeled \`\`\`render-image immediately after your explanation.
+
+Rules for render-image blocks:
+- The canvas is 480 pixels wide × 300 pixels tall.
+- The variable \`ctx\` is already bound to the 2D rendering context — do NOT declare it.
+- Write clean, self-contained JavaScript drawing code. No external libraries.
+- Always set a white or light background first: ctx.fillStyle="#ffffff"; ctx.fillRect(0,0,480,300);
+- Use the NavGPT accent colour #D97757 for highlights and important elements.
+- Include clear text labels on the diagram using ctx.fillText().
+- Only include this block when a diagram genuinely adds value. Never include it for simple factual answers.
+
+Example render-image block (bar chart):
+\`\`\`render-image
+ctx.fillStyle="#ffffff"; ctx.fillRect(0,0,480,300);
+const bars=[["Jan",80],["Feb",120],["Mar",60]];
+const bw=60,gap=30,base=260;
+bars.forEach(([label,val],i)=>{
+  const x=40+i*(bw+gap);
+  ctx.fillStyle="#D97757";
+  ctx.fillRect(x,base-val,bw,val);
+  ctx.fillStyle="#2D2A26";
+  ctx.font="13px sans-serif";
+  ctx.fillText(label,x+bw/2-12,base+18);
+  ctx.fillText(val,x+bw/2-8,base-val-6);
+});
+ctx.fillStyle="#2D2A26";
+ctx.font="bold 15px sans-serif";
+ctx.fillText("Monthly Data",160,28);
+\`\`\`
+
+## Document export
+When the user asks for a presentation, slide deck, PPT, Word document, DOCX, PDF, report, or similar, do BOTH:
+1. Write a short, friendly reply as normal (1-3 sentences).
+2. Immediately after, include a single fenced code block labeled \`\`\`export-json containing ONLY valid JSON with this exact shape:
+{
+  "title": "Short overall title",
+  "subtitle": "Optional one-line subtitle or tagline (omit if not useful)",
+  "sections": [
+    { "heading": "Section or slide heading", "content": ["a fully-formed, informative point", "another detailed point"] }
+  ]
+}
+- Use 6-10 sections. Each section needs 4-7 content items (complete sentences, 12-30 words each).
+- Do NOT add this block for normal conversational replies.`;
+
+/**
+ * Pick the right system prompt based on the response mode sent by the frontend.
+ * @param {"student"|"general"|undefined} responseMode
+ */
+function getSystemPrompt(responseMode) {
+  return responseMode === "student" ? SYSTEM_PROMPT_STUDENT : SYSTEM_PROMPT_GENERAL;
+}
 
 // ---------- Auth middleware ----------
 async function requireAuth(req, res, next) {
@@ -419,6 +493,7 @@ app.post("/api/chat", requireAuth, async (req, res) => {
   const userMessage = (req.body?.message || "").trim();
   const history = Array.isArray(req.body?.history) ? req.body.history : [];
   const modelId = req.body?.modelId;
+  const responseMode = req.body?.responseMode === "student" ? "student" : "general";
 
   if (!userMessage) return res.status(400).json({ error: "message is required." });
   if (userMessage.length > 4000) return res.status(400).json({ error: "message is too long." });
@@ -444,7 +519,7 @@ app.post("/api/chat", requireAuth, async (req, res) => {
   const job = {
     cancelled: false,
     send,
-    start: () => runChat({ req, res, send, userMessage, history, slot }),
+    start: () => runChat({ req, res, send, userMessage, history, slot, responseMode }),
   };
 
   req.on("close", () => {
@@ -475,7 +550,7 @@ app.post("/api/chat", requireAuth, async (req, res) => {
 //   - "nvidia"     → NVIDIA NIM endpoint (direct, with thinking params)
 //   - "openrouter" → OpenRouter endpoint
 //   - "gemini"     → Google Gemini REST streaming endpoint
-async function runChat({ req, res, send, userMessage, history, slot }) {
+async function runChat({ req, res, send, userMessage, history, slot, responseMode }) {
   // RAG retrieval — returns [] until documents are ingested, so this is a
   // no-op for now but wired up and ready.
   const contextChunks = await retrieveContext(userMessage);
@@ -505,7 +580,7 @@ async function runChat({ req, res, send, userMessage, history, slot }) {
     }, []);
 
   const messages = [
-    { role: "system", content: SYSTEM_PROMPT + contextBlock },
+    { role: "system", content: getSystemPrompt(responseMode) + contextBlock },
     ...historyMessages,
     { role: "user", content: userMessage },
   ];

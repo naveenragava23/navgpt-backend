@@ -39,6 +39,7 @@
     body {
       height: 100%;
       overscroll-behavior: none;
+      overflow: hidden; /* Prevent page from scrolling up when keyboard opens */
     }
 
     body {
@@ -1034,35 +1035,6 @@
         align-items: center;
         justify-content: center;
       }
-
-      /* Fix: pin the input bar to the bottom so the header is never pushed
-         off-screen when the virtual keyboard opens on mobile. */
-      #inputBar {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        margin: 0;
-        max-width: 100%;
-        /* Raise z-index above chat bubbles but below sidebar overlay */
-        z-index: 15;
-        /* Ensure it doesn't stretch wider than the chat content */
-        box-sizing: border-box;
-      }
-
-      #main {
-        /* Let main fill the viewport; header stays at top, chatWindow scrolls */
-        height: 100dvh;
-        overflow: hidden;
-      }
-
-      #chatWindow {
-        /* Reserve space for the fixed input bar (~70px) + safe bottom */
-        padding-bottom: calc(80px + var(--safe-bottom));
-        /* chatWindow must scroll independently */
-        height: 100%;
-        overflow-y: auto;
-      }
     }
 
     @media (max-width: 640px) {
@@ -1082,8 +1054,7 @@
         padding-left: 14px;
         padding-right: 14px;
         padding-top: 16px;
-        /* bottom already set by 860px rule, extend for extra safe area */
-        padding-bottom: calc(80px + var(--safe-bottom));
+        padding-bottom: 8px;
       }
 
       #inputBar {
@@ -1964,11 +1935,14 @@
 
       let bannerDataUrl = null;
 
+      const hasInlineDiagrams = data?.sections?.some(s => !!s.diagramCode);
+      const totalDiagrams = diagramDataUrls.length + (hasInlineDiagrams ? data.sections.filter(s => !!s.diagramCode).length : 0);
+
       // Show a note if diagrams will be embedded in the PPTX
-      if (diagramDataUrls.length > 0) {
+      if (totalDiagrams > 0) {
         const diagramNote = document.createElement("span");
         diagramNote.style.cssText = "font-size:0.75rem;color:var(--accent-dark);font-weight:600;width:100%;";
-        diagramNote.textContent = `🖼 ${diagramDataUrls.length} diagram${diagramDataUrls.length > 1 ? "s" : ""} will be embedded in PPTX`;
+        diagramNote.textContent = `🖼 Diagram(s) will be embedded in PPTX`;
         bar.appendChild(diagramNote);
       }
 
@@ -2032,6 +2006,29 @@
       bubbleEl.appendChild(bar);
     }
 
+    /**
+     * Helper to render inline diagramCode to a PNG Data URL
+     */
+    function renderDiagramCodeToDataURL(code) {
+      if (!code) return null;
+      try {
+        const DPR = 2;
+        const CANVAS_W = 480;
+        const CANVAS_H = 300;
+        const canvas = document.createElement("canvas");
+        canvas.width  = CANVAS_W * DPR;
+        canvas.height = CANVAS_H * DPR;
+        const ctx = canvas.getContext("2d");
+        ctx.scale(DPR, DPR);
+        // eslint-disable-next-line no-new-func
+        new Function("ctx", code)(ctx);
+        return canvas.toDataURL("image/png");
+      } catch (err) {
+        console.warn("PPTX diagram rendering failed:", err);
+        return null;
+      }
+    }
+
     /* =========================================================
        PPTX — 16:9, Grid Layout, Banner Fit, Footer Fixed, Diagrams Embedded
        ========================================================= */
@@ -2075,6 +2072,8 @@
       const cover = P.addSlide();
       cover.background = { color: TOKENS.cream };
 
+      const sections = data.sections || [];
+
       /* Banner: fitted strip at top (never full-slide background, never fill) */
       if (bannerDataUrl) {
         const bannerW = W - MARGIN * 2; // 11.633
@@ -2088,11 +2087,27 @@
           sizing: { type: "contain", w: bannerW, h: bannerH }
         });
       } else {
-        // Empty banner placeholder (subtle surface)
-        cover.addShape(P.ShapeType.roundRect, {
-          x: MARGIN, y: 0.3, w: W - MARGIN * 2, h: bannerH, rectRadius: 0.08,
-          fill: { color: TOKENS.surface }
-        });
+        // Decorative icon grid for cover (if no image is provided)
+        const icons = sections.map(s => s.icon).filter(Boolean);
+        if (icons.length > 0) {
+          const bannerW = W - MARGIN * 2;
+          const bannerH = 2.2;
+          cover.addShape(P.ShapeType.roundRect, {
+            x: MARGIN, y: 0.3, w: bannerW, h: bannerH, rectRadius: 0.08,
+            fill: { color: TOKENS.surface }
+          });
+          const iconsText = icons.join("   ");
+          cover.addText(iconsText, {
+            x: MARGIN, y: 0.3, w: bannerW, h: bannerH,
+            fontSize: 48, align: "center", valign: "middle", color: TOKENS.dark
+          });
+        } else {
+          // Empty banner placeholder (subtle surface)
+          cover.addShape(P.ShapeType.roundRect, {
+            x: MARGIN, y: 0.3, w: W - MARGIN * 2, h: 2.2, rectRadius: 0.08,
+            fill: { color: TOKENS.surface }
+          });
+        }
       }
 
       /* Title below banner — no overlap */
@@ -2115,7 +2130,6 @@
       slideFooter(cover, 1);
 
       /* ----- AGENDA SLIDE ----- */
-      const sections = data.sections || [];
       if (sections.length > 1) {
         const aSlide = P.addSlide();
         aSlide.background = { color: TOKENS.cream };
@@ -2150,7 +2164,8 @@
             x: x, y: y, w: 0.55, h: 0.55, align: "center", valign: "middle",
             fontSize: 15, bold: true, color: TOKENS.white, fontFace: TOKENS.font
           });
-          aSlide.addText(s.heading || `Section ${i + 1}`, {
+          const iconPrefix = s.icon ? `${s.icon} ` : "";
+          aSlide.addText(iconPrefix + (s.heading || `Section ${i + 1}`), {
             x: x + 0.7, y: y - 0.05, w: colW - 0.7, h: 0.55,
             fontSize: 14, bold: true, color: TOKENS.dark, fontFace: TOKENS.font, valign: "middle"
           });
@@ -2234,17 +2249,29 @@
       let slideNum = sections.length > 1 ? 3 : 2;
 
       // ---- Diagram assignment: distribute diagrams across sections ----
-      // Each diagram from a render-image block is assigned to the first section
-      // slide (page 0 of that section). Extra diagrams go to supplemental slides.
       const sectionDiagrams = {}; // sectionIdx -> dataUrl
-      const extraDiagrams = [];  // diagrams beyond the number of sections
-      diagramDataUrls.forEach((url, i) => {
-        if (i < sections.length) {
-          sectionDiagrams[i] = url;
-        } else {
-          extraDiagrams.push(url);
+      const extraDiagrams = [];  
+
+      // 1. Process inline diagramCode from the sections
+      sections.forEach((sec, idx) => {
+        if (sec.diagramCode) {
+          const url = renderDiagramCodeToDataURL(sec.diagramCode);
+          if (url) sectionDiagrams[idx] = url;
         }
       });
+
+      // 2. Process external diagrams (from render-image blocks in chat)
+      // We only assign them to sections that don't already have one.
+      let extDiagramIdx = 0;
+      for (let i = 0; i < sections.length && extDiagramIdx < diagramDataUrls.length; i++) {
+        if (!sectionDiagrams[i]) {
+          sectionDiagrams[i] = diagramDataUrls[extDiagramIdx++];
+        }
+      }
+      // Any leftovers go to extraDiagrams
+      for (; extDiagramIdx < diagramDataUrls.length; extDiagramIdx++) {
+        extraDiagrams.push(diagramDataUrls[extDiagramIdx]);
+      }
 
       /* ----- CONTENT SLIDES ----- */
       sections.forEach((sec, idx) => {
@@ -2257,9 +2284,10 @@
         const sectionImg = sectionDiagrams[idx] || null;
 
         pages.forEach((pageItems, pageIdx) => {
+          const iconPrefix = sec.icon ? `${sec.icon} ` : "";
           const slideLabel = totalPages > 1
-            ? `${sec.heading || `Section ${idx + 1}`} (${pageIdx + 1}/${totalPages})`
-            : (sec.heading || `Section ${idx + 1}`);
+            ? `${iconPrefix}${sec.heading || `Section ${idx + 1}`} (${pageIdx + 1}/${totalPages})`
+            : `${iconPrefix}${sec.heading || `Section ${idx + 1}`}`;
 
           // On slides WITH a diagram, split the body 60/40 (bullets | image)
           const hasDiagram = sectionImg && pageIdx === 0;
@@ -2338,17 +2366,23 @@
             ? bulletColW - CARD_PAD_L - 0.07
             : TEXT_W;
 
-          const bullets = pageItems.map(c => ({
-            text: c,
-            options: {
-              bullet: { code: "25CF", indent: 16 },
-              color: TOKENS.dark,
-              breakLine: true,
-              paraSpaceAfter: pageItems.length <= 5 ? 14 : 10,
-              fontFace: TOKENS.font,
-              fontSize: autoFontSize
-            }
-          }));
+          const bullets = pageItems.map((c, i) => {
+            // First bullet gets an accent highlighted style
+            const isHighlight = (i === 0);
+            return {
+              text: c,
+              options: {
+                bullet: isHighlight ? false : { code: "25CF", indent: 16 },
+                color: isHighlight ? TOKENS.white : TOKENS.dark,
+                highlight: isHighlight ? TOKENS.accent : undefined,
+                bold: isHighlight,
+                breakLine: true,
+                paraSpaceAfter: pageItems.length <= 5 ? 14 : 10,
+                fontFace: TOKENS.font,
+                fontSize: autoFontSize
+              }
+            };
+          });
 
           s.addText(bullets, {
             x: MARGIN + CARD_PAD_L,
@@ -3263,6 +3297,12 @@
         e.preventDefault();
         send();
       }
+    });
+
+    // Fix for iOS Safari bug where page stays scrolled up after keyboard closes
+    messageInput.addEventListener("blur", () => {
+      window.scrollTo(0, 0);
+      document.body.scrollTop = 0;
     });
   </script>
 </body>

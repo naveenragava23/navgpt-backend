@@ -190,6 +190,8 @@
       justify-content: space-between;
       gap: 12px;
       flex-shrink: 0;
+      position: sticky;
+      top: 0;
       z-index: 10;
     }
 
@@ -506,6 +508,7 @@
       margin: 0 auto;
       width: 100%;
       -webkit-overflow-scrolling: touch;
+      /* Extra bottom padding on mobile so content isn't hidden behind the fixed input bar */
     }
 
     #loadMoreMessagesBtn {
@@ -1031,6 +1034,35 @@
         align-items: center;
         justify-content: center;
       }
+
+      /* Fix: pin the input bar to the bottom so the header is never pushed
+         off-screen when the virtual keyboard opens on mobile. */
+      #inputBar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        margin: 0;
+        max-width: 100%;
+        /* Raise z-index above chat bubbles but below sidebar overlay */
+        z-index: 15;
+        /* Ensure it doesn't stretch wider than the chat content */
+        box-sizing: border-box;
+      }
+
+      #main {
+        /* Let main fill the viewport; header stays at top, chatWindow scrolls */
+        height: 100dvh;
+        overflow: hidden;
+      }
+
+      #chatWindow {
+        /* Reserve space for the fixed input bar (~70px) + safe bottom */
+        padding-bottom: calc(80px + var(--safe-bottom));
+        /* chatWindow must scroll independently */
+        height: 100%;
+        overflow-y: auto;
+      }
     }
 
     @media (max-width: 640px) {
@@ -1047,7 +1079,11 @@
       }
 
       #chatWindow {
-        padding: 16px 14px 8px;
+        padding-left: 14px;
+        padding-right: 14px;
+        padding-top: 16px;
+        /* bottom already set by 860px rule, extend for extra safe area */
+        padding-bottom: calc(80px + var(--safe-bottom));
       }
 
       #inputBar {
@@ -1089,6 +1125,164 @@
         opacity: 0.6;
       }
     }
+
+    /* ---------- Student / General mode toggle ---------- */
+    .mode-toggle {
+      display: flex;
+      align-items: center;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 3px;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+
+    .mode-btn {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: none;
+      border: none;
+      border-radius: 8px;
+      padding: 5px 10px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      font-family: inherit;
+      color: var(--muted);
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .mode-btn:hover {
+      background: var(--border-soft);
+      color: var(--text);
+    }
+
+    .mode-btn.active {
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      box-shadow: 0 1px 4px rgba(217, 119, 87, 0.35);
+    }
+
+    .mode-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      background: var(--accent-light);
+      color: var(--accent-dark);
+      border-radius: 20px;
+      padding: 2px 7px;
+      margin-left: 4px;
+      letter-spacing: 0.03em;
+    }
+
+    @media (max-width: 640px) {
+      .mode-btn {
+        padding: 5px 7px;
+        font-size: 0.72rem;
+      }
+      .mode-btn span.mode-label {
+        display: none;
+      }
+    }
+
+    /* ---------- Canvas / Generated image card ---------- */
+    .gen-image-card {
+      margin-top: 14px;
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      background: var(--bg);
+      box-shadow: var(--shadow);
+      animation: rise 0.28s ease-out;
+    }
+
+    .gen-image-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border-soft);
+      background: var(--panel);
+    }
+
+    .gen-image-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .gen-image-label::before {
+      content: "🎨";
+      font-size: 0.9rem;
+    }
+
+    .gen-image-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--accent-light);
+      color: var(--accent-dark);
+      border: none;
+      border-radius: 7px;
+      padding: 4px 10px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.14s ease;
+    }
+
+    .gen-image-download:hover {
+      background: var(--border);
+    }
+
+    .gen-image-body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 14px;
+      background: var(--bg);
+    }
+
+    .gen-image-body canvas {
+      border-radius: 8px;
+      /* Always fill the card width; explicit pixel size set via JS for HiDPI */
+      width: 100%;
+      max-width: 480px;
+      height: auto;
+      display: block;
+      box-shadow: 0 2px 10px rgba(45,42,38,0.08);
+    }
+
+    .gen-image-error {
+      padding: 12px 16px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-style: italic;
+    }
+
+    /* Student mode visual indicator in bot messages */
+    .student-mode-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: var(--accent-dark);
+      background: var(--accent-light);
+      border-radius: 20px;
+      padding: 2px 8px;
+      margin-bottom: 8px;
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js" crossorigin="anonymous"
     referrerpolicy="no-referrer"></script>
@@ -1118,6 +1312,15 @@
         <h1>NavGPT</h1>
       </div>
       <div class="header-right">
+        <!-- Mode toggle: Student / General -->
+        <div class="mode-toggle" id="modeToggle" role="group" aria-label="Response mode">
+          <button class="mode-btn" id="modeBtnGeneral" aria-pressed="true" title="General mode">
+            💼 <span class="mode-label">General</span>
+          </button>
+          <button class="mode-btn active" id="modeBtnStudent" aria-pressed="false" title="Student mode — real-world examples">
+            🎓 <span class="mode-label">Student</span>
+          </button>
+        </div>
         <!-- Model picker replaces old <select> -->
         <div id="modelPickerWrap">
           <button id="modelPickerBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="Select AI model">
@@ -1200,6 +1403,35 @@
     let messagesFirstDoc = null;
     let messagesExhausted = false;
     let loadMoreMessagesBtn = null;
+
+    // ---- Response mode toggle ----
+    let responseMode = "student"; // "student" | "general"
+
+    const modeBtnGeneral = document.getElementById("modeBtnGeneral");
+    const modeBtnStudent = document.getElementById("modeBtnStudent");
+
+    function setResponseMode(mode) {
+      responseMode = mode;
+      if (mode === "student") {
+        modeBtnStudent.classList.add("active");
+        modeBtnGeneral.classList.remove("active");
+        modeBtnStudent.setAttribute("aria-pressed", "true");
+        modeBtnGeneral.setAttribute("aria-pressed", "false");
+        messageInput.placeholder = "Ask Naveen anything — get a real-world explanation! 🎓";
+      } else {
+        modeBtnGeneral.classList.add("active");
+        modeBtnStudent.classList.remove("active");
+        modeBtnGeneral.setAttribute("aria-pressed", "true");
+        modeBtnStudent.setAttribute("aria-pressed", "false");
+        messageInput.placeholder = "Ask Naveen anything...";
+      }
+    }
+
+    modeBtnGeneral.addEventListener("click", () => setResponseMode("general"));
+    modeBtnStudent.addEventListener("click", () => setResponseMode("student"));
+
+    // Initialise to student mode visually
+    setResponseMode("student");
 
     function initials(nameOrEmail) {
       if (!nameOrEmail) return "?";
@@ -1618,13 +1850,127 @@
     }
 
     /* =========================================================
+       CANVAS IMAGE RENDERER (render-image blocks)
+       ========================================================= */
+
+    /**
+     * Scan rawText for ```render-image ... ``` fenced blocks.
+     * For each one found, draw it onto a HiDPI canvas and append a
+     * polished image card below bubbleEl.
+     *
+     * Returns an array of PNG data URLs for each successfully rendered
+     * diagram, so they can be embedded into PPTX/PDF exports.
+     */
+    function parseAndRenderImages(rawText, bubbleEl) {
+      const FENCE_RE = /```render-image\s*\n([\s\S]*?)```/gi;
+      let match;
+      // Collect data URLs of successfully rendered diagrams
+      const diagramDataUrls = [];
+
+      while ((match = FENCE_RE.exec(rawText)) !== null) {
+        const code = match[1];
+
+        // --- outer card ---
+        const card = document.createElement("div");
+        card.className = "gen-image-card";
+
+        // --- header row ---
+        const header = document.createElement("div");
+        header.className = "gen-image-header";
+
+        const label = document.createElement("span");
+        label.className = "gen-image-label";
+        label.textContent = "Generated diagram";
+        header.appendChild(label);
+
+        const dlBtn = document.createElement("button");
+        dlBtn.className = "gen-image-download";
+        dlBtn.textContent = "⬇ Download PNG";
+        header.appendChild(dlBtn);
+
+        card.appendChild(header);
+
+        // --- canvas body ---
+        const body = document.createElement("div");
+        body.className = "gen-image-body";
+
+        // Use 2× pixel density for crisp HiDPI rendering.
+        // The CSS width/height stay at 480×300 (set via CSS class).
+        const DPR = 2;
+        const CANVAS_W = 480;
+        const CANVAS_H = 300;
+        const canvas = document.createElement("canvas");
+        canvas.width  = CANVAS_W * DPR;
+        canvas.height = CANVAS_H * DPR;
+        // CSS display size — the class handles max-width and width:100%
+        canvas.style.width  = CANVAS_W + "px";
+        canvas.style.height = CANVAS_H + "px";
+
+        let renderOk = false;
+        try {
+          const ctx = canvas.getContext("2d");
+          // Scale all drawing commands so code written for 480×300 renders
+          // at full 960×600 resolution without any code changes from the AI.
+          ctx.scale(DPR, DPR);
+          // Execute the AI-generated drawing code with ctx bound
+          // eslint-disable-next-line no-new-func
+          new Function("ctx", code)(ctx);
+          renderOk = true;
+        } catch (err) {
+          console.warn("render-image code failed:", err);
+        }
+
+        if (renderOk) {
+          body.appendChild(canvas);
+          card.appendChild(body);
+
+          // Capture data URL for export (before any DOM changes)
+          const dataUrl = canvas.toDataURL("image/png");
+          diagramDataUrls.push(dataUrl);
+
+          // Wire download button
+          dlBtn.addEventListener("click", () => {
+            const link = document.createElement("a");
+            link.download = "navgpt-diagram.png";
+            link.href = dataUrl;
+            link.click();
+          });
+        } else {
+          const errMsg = document.createElement("div");
+          errMsg.className = "gen-image-error";
+          errMsg.textContent = "⚠ Diagram could not be rendered — the drawing code returned an error.";
+          card.appendChild(errMsg);
+          dlBtn.style.display = "none";
+        }
+
+        bubbleEl.appendChild(card);
+      }
+
+      // Return array of data URLs (empty if none rendered successfully)
+      return diagramDataUrls;
+    }
+
+    /* =========================================================
        EXPORT BAR
        ========================================================= */
-    function addExportBar(bubbleEl, data) {
+    /**
+     * @param {HTMLElement} bubbleEl
+     * @param {object} data - parsed export JSON
+     * @param {string[]} [diagramDataUrls] - PNG data URLs from rendered canvases
+     */
+    function addExportBar(bubbleEl, data, diagramDataUrls = []) {
       const bar = document.createElement("div");
       bar.className = "export-bar";
 
       let bannerDataUrl = null;
+
+      // Show a note if diagrams will be embedded in the PPTX
+      if (diagramDataUrls.length > 0) {
+        const diagramNote = document.createElement("span");
+        diagramNote.style.cssText = "font-size:0.75rem;color:var(--accent-dark);font-weight:600;width:100%;";
+        diagramNote.textContent = `🖼 ${diagramDataUrls.length} diagram${diagramDataUrls.length > 1 ? "s" : ""} will be embedded in PPTX`;
+        bar.appendChild(diagramNote);
+      }
 
       const attachBtn = document.createElement("button");
       attachBtn.type = "button";
@@ -1657,9 +2003,10 @@
       bar.appendChild(footerInput);
 
       [
-        { format: "pptx", label: "⬇ PPTX", generate: generatePPTX },
+        { format: "pptx", label: "⬇ PPTX",
+          generate: (d, banner, footer) => generatePPTX(d, banner, footer, diagramDataUrls) },
         { format: "docx", label: "⬇ DOCX", generate: generateDOCX },
-        { format: "pdf", label: "⬇ PDF", generate: generatePDF },
+        { format: "pdf",  label: "⬇ PDF",  generate: generatePDF },
       ].forEach(({ label, generate }) => {
         const btn = document.createElement("button");
         btn.type = "button";
@@ -1686,9 +2033,15 @@
     }
 
     /* =========================================================
-       PPTX — 16:9, Grid Layout, Banner Fit, Footer Fixed
+       PPTX — 16:9, Grid Layout, Banner Fit, Footer Fixed, Diagrams Embedded
        ========================================================= */
-    async function generatePPTX(data, bannerDataUrl, footerText) {
+    /**
+     * @param {object}   data           - export JSON {title, subtitle, sections}
+     * @param {string}   bannerDataUrl  - cover image data URL (optional)
+     * @param {string}   footerText     - footer label for every slide
+     * @param {string[]} diagramDataUrls - PNG data URLs of rendered canvas diagrams
+     */
+    async function generatePPTX(data, bannerDataUrl, footerText, diagramDataUrls = []) {
       if (!window.PptxGenJS) throw new Error("pptxgenjs not loaded. Check CDN / ad-blocker.");
       const P = new window.PptxGenJS();
       P.defineLayout({ name: "UNIVERSITY", width: SLIDE_W, height: SLIDE_H });
@@ -1806,62 +2159,242 @@
         slideFooter(aSlide, 2);
       }
 
+      /* -------------------------------------------------------
+         CONTENT SLIDES — dynamic sizing & auto-split
+         -------------------------------------------------------
+         Layout geometry (inches):
+           Body area:  from HEADER_H + 0.3  →  H - SAFE_BOTTOM - 0.15
+           Content card fills the entire body area (minus inner padding).
+           Bullets are split across multiple slides when they can't all fit.
+
+         Height estimation approach
+         ─────────────────────────
+         We estimate the rendered height of each bullet by:
+           1. Counting approximate wrapped lines = ceil(charCount / CHARS_PER_LINE)
+           2. Height per line = (fontSize pt → inches) × lineSpacingMultiple
+           3. Adding paraSpaceAfter for each bullet
+         This gives a conservative over-estimate which prevents overflow.
+      ------------------------------------------------------- */
+
+      // ---- Layout constants ----
+      const BODY_TOP     = HEADER_H + 0.3;          // where card starts
+      const BODY_BOTTOM  = H - SAFE_BOTTOM - 0.15;  // where card ends
+      const BODY_H       = BODY_BOTTOM - BODY_TOP;  // usable card height
+
+      const CARD_PAD_V   = 0.18;   // vertical padding inside card (top+bottom each)
+      const CARD_PAD_L   = 0.28;   // left inner padding (bullet indent)
+      const TEXT_W       = W - MARGIN * 2 - CARD_PAD_L - 0.07; // text wrap width in inches
+
+      const FONT_SIZE    = 15;      // pt
+      const LINE_MULT    = 1.45;    // line spacing multiplier
+      const PARA_AFTER   = 0.14;    // inches of space after each bullet
+
+      // Approximate characters per wrapped line at FONT_SIZE, TEXT_W ≈ 11.5 in
+      // Empirical: Calibri 15pt → ~0.10 in per char on a 16:9 slide
+      const CHAR_W_IN    = 0.092;
+      const CHARS_PER_LINE = Math.floor(TEXT_W / CHAR_W_IN);
+
+      // Height of a single line in inches (pt → in = pt / 72)
+      const LINE_H_IN    = (FONT_SIZE / 72) * LINE_MULT;
+
+      /** Estimate rendered height (in) for a single bullet string */
+      function bulletHeight(text) {
+        const wrappedLines = Math.max(1, Math.ceil(text.length / CHARS_PER_LINE));
+        return wrappedLines * LINE_H_IN + PARA_AFTER;
+      }
+
+      /** Maximum bullet content height that fits inside one card */
+      const MAX_CONTENT_H = BODY_H - CARD_PAD_V * 2;
+
+      /**
+       * Split an array of bullets into pages where the total estimated height
+       * of each page does not exceed MAX_CONTENT_H.
+       */
+      function paginateBullets(items) {
+        const pages = [];
+        let currentPage = [];
+        let currentH = 0;
+
+        for (const item of items) {
+          const h = bulletHeight(item);
+          if (currentPage.length > 0 && currentH + h > MAX_CONTENT_H) {
+            pages.push(currentPage);
+            currentPage = [item];
+            currentH = h;
+          } else {
+            currentPage.push(item);
+            currentH += h;
+          }
+        }
+        if (currentPage.length > 0) pages.push(currentPage);
+        return pages;
+      }
+
+      // ---- Slide counter (starts after cover + agenda) ----
+      let slideNum = sections.length > 1 ? 3 : 2;
+
+      // ---- Diagram assignment: distribute diagrams across sections ----
+      // Each diagram from a render-image block is assigned to the first section
+      // slide (page 0 of that section). Extra diagrams go to supplemental slides.
+      const sectionDiagrams = {}; // sectionIdx -> dataUrl
+      const extraDiagrams = [];  // diagrams beyond the number of sections
+      diagramDataUrls.forEach((url, i) => {
+        if (i < sections.length) {
+          sectionDiagrams[i] = url;
+        } else {
+          extraDiagrams.push(url);
+        }
+      });
+
       /* ----- CONTENT SLIDES ----- */
       sections.forEach((sec, idx) => {
+        const items = sec.content || [];
+        if (!items.length) return;
+
+        const pages = paginateBullets(items);
+        const totalPages = pages.length;
+        // Diagram (if any) only goes on the FIRST page of this section
+        const sectionImg = sectionDiagrams[idx] || null;
+
+        pages.forEach((pageItems, pageIdx) => {
+          const slideLabel = totalPages > 1
+            ? `${sec.heading || `Section ${idx + 1}`} (${pageIdx + 1}/${totalPages})`
+            : (sec.heading || `Section ${idx + 1}`);
+
+          // On slides WITH a diagram, split the body 60/40 (bullets | image)
+          const hasDiagram = sectionImg && pageIdx === 0;
+          const BULLET_W_RATIO = hasDiagram ? 0.58 : 1.0;
+          const IMG_GAP = 0.18; // gap between bullets and image column
+          const cardW = W - MARGIN * 2;
+          const bulletColW = hasDiagram
+            ? cardW * BULLET_W_RATIO - IMG_GAP / 2
+            : TEXT_W;
+          const imgColW  = hasDiagram ? cardW * (1 - BULLET_W_RATIO) - IMG_GAP / 2 : 0;
+          const imgColX  = MARGIN + cardW * BULLET_W_RATIO + IMG_GAP / 2;
+
+          const s = P.addSlide();
+          s.background = { color: TOKENS.cream };
+
+          /* --- Header band --- */
+          s.addShape(P.ShapeType.roundRect, {
+            x: 0, y: 0, w: W, h: HEADER_H, rectRadius: 0.08,
+            fill: { color: TOKENS.dark }
+          });
+          s.addShape(P.ShapeType.roundRect, {
+            x: MARGIN, y: (HEADER_H - 0.2) / 2, w: 0.2, h: 0.2, rectRadius: 0.04,
+            fill: { color: TOKENS.accent }
+          });
+          s.addText(slideLabel, {
+            x: MARGIN + 0.35, y: 0.22, w: W - MARGIN * 2 - 0.35, h: 0.75,
+            fontSize: totalPages > 1 ? 20 : 24,
+            bold: true, color: TOKENS.white, fontFace: TOKENS.font, valign: "middle"
+          });
+
+          /* --- Full-height content card --- */
+          s.addShape(P.ShapeType.roundRect, {
+            x: MARGIN, y: BODY_TOP, w: cardW, h: BODY_H, rectRadius: 0.06,
+            fill: { color: TOKENS.white },
+            shadow: { type: "outer", color: "BFB5A6", blur: 6, angle: 90, opacity: 0.15 }
+          });
+          // Left accent bar — full card height
+          s.addShape(P.ShapeType.roundRect, {
+            x: MARGIN, y: BODY_TOP, w: 0.06, h: BODY_H, rectRadius: 0.03,
+            fill: { color: TOKENS.accent }
+          });
+
+          /* --- Diagram image column (right side) --- */
+          if (hasDiagram) {
+            // Thin divider between text and image
+            s.addShape(P.ShapeType.rect, {
+              x: imgColX - IMG_GAP / 2, y: BODY_TOP + CARD_PAD_V,
+              w: 0.005, h: BODY_H - CARD_PAD_V * 2,
+              fill: { color: TOKENS.border }
+            });
+            // The diagram — maintain 16:6.25 canvas aspect ratio (480:300)
+            const imgH = Math.min(BODY_H - CARD_PAD_V * 2, imgColW * (300 / 480));
+            const imgY = BODY_TOP + CARD_PAD_V + (BODY_H - CARD_PAD_V * 2 - imgH) / 2;
+            try {
+              s.addImage({
+                data: sectionImg,
+                x: imgColX,
+                y: imgY,
+                w: imgColW,
+                h: imgH,
+                sizing: { type: "contain", w: imgColW, h: imgH }
+              });
+            } catch (imgErr) {
+              console.warn("PPTX: could not embed diagram image:", imgErr);
+            }
+          }
+
+          /* --- Bullets --- */
+          const autoFontSize = pageItems.length <= 4 ? 16
+            : pageItems.length <= 6 ? 15
+            : pageItems.length <= 8 ? 14
+            : 13;
+
+          // Adjust effective text width when we have a diagram column
+          const effectiveTextW = hasDiagram
+            ? bulletColW - CARD_PAD_L - 0.07
+            : TEXT_W;
+
+          const bullets = pageItems.map(c => ({
+            text: c,
+            options: {
+              bullet: { code: "25CF", indent: 16 },
+              color: TOKENS.dark,
+              breakLine: true,
+              paraSpaceAfter: pageItems.length <= 5 ? 14 : 10,
+              fontFace: TOKENS.font,
+              fontSize: autoFontSize
+            }
+          }));
+
+          s.addText(bullets, {
+            x: MARGIN + CARD_PAD_L,
+            y: BODY_TOP + CARD_PAD_V,
+            w: effectiveTextW,
+            h: BODY_H - CARD_PAD_V * 2,
+            fontSize: autoFontSize,
+            lineSpacing: autoFontSize * LINE_MULT,
+            color: TOKENS.dark,
+            fontFace: TOKENS.font,
+            valign: "top",
+            wrap: true
+          });
+
+          slideFooter(s, slideNum++);
+        });
+      });
+
+      /* ----- SUPPLEMENTAL DIAGRAM SLIDES (extras beyond section count) ----- */
+      extraDiagrams.forEach((imgUrl, i) => {
         const s = P.addSlide();
         s.background = { color: TOKENS.cream };
-
-        /* Header band */
         s.addShape(P.ShapeType.roundRect, {
           x: 0, y: 0, w: W, h: HEADER_H, rectRadius: 0.08,
           fill: { color: TOKENS.dark }
         });
-        s.addShape(P.ShapeType.roundRect, {
-          x: MARGIN, y: (HEADER_H - 0.2) / 2, w: 0.2, h: 0.2, rectRadius: 0.04,
-          fill: { color: TOKENS.accent }
-        });
-        s.addText(sec.heading || `Section ${idx + 1}`, {
+        s.addText(`Visual Supplement ${i + 1}`, {
           x: MARGIN + 0.35, y: 0.22, w: W - MARGIN * 2 - 0.35, h: 0.75,
-          fontSize: 24, bold: true, color: TOKENS.white, fontFace: TOKENS.font, valign: "middle"
+          fontSize: 22, bold: true, color: TOKENS.white, fontFace: TOKENS.font, valign: "middle"
         });
-
-        /* Content card */
-        const items = sec.content || [];
-        const contentTop = HEADER_H + 0.35;
-        const contentLimit = H - SAFE_BOTTOM - 0.3;
-        const cardMaxH = Math.max(0, contentLimit - contentTop - 0.2);
-        const cardH = Math.min(cardMaxH, 0.6 + items.length * 0.42);
-
-        s.addShape(P.ShapeType.roundRect, {
-          x: MARGIN, y: contentTop, w: W - MARGIN * 2, h: cardH, rectRadius: 0.06,
-          fill: { color: TOKENS.white },
-          shadow: { type: "outer", color: "BFB5A6", blur: 6, angle: 90, opacity: 0.15 }
-        });
-        s.addShape(P.ShapeType.roundRect, {
-          x: MARGIN, y: contentTop, w: 0.06, h: cardH, rectRadius: 0.03,
-          fill: { color: TOKENS.accent }
-        });
-
-        const bullets = items.map(c => ({
-          text: c,
-          options: {
-            bullet: { code: "25CF", indent: 16 },
-            color: TOKENS.dark,
-            breakLine: true,
-            paraSpaceAfter: 12,
-            fontFace: TOKENS.font,
-            fontSize: 15
-          }
-        }));
-
-        s.addText(bullets, {
-          x: MARGIN + 0.25, y: contentTop + 0.15,
-          w: W - MARGIN * 2 - 0.35, h: cardH - 0.3,
-          fontSize: 15, lineSpacing: 22, color: TOKENS.dark,
-          fontFace: TOKENS.font, valign: "top"
-        });
-
-        slideFooter(s, idx + (sections.length > 1 ? 3 : 2));
+        const maxImgW = W - MARGIN * 2;
+        const maxImgH = BODY_H - 0.3;
+        const imgH = Math.min(maxImgH, maxImgW * (300 / 480));
+        const imgW = imgH * (480 / 300);
+        const imgX = MARGIN + (maxImgW - imgW) / 2;
+        try {
+          s.addImage({
+            data: imgUrl,
+            x: imgX, y: BODY_TOP + 0.15,
+            w: imgW, h: imgH,
+            sizing: { type: "contain", w: imgW, h: imgH }
+          });
+        } catch (imgErr) {
+          console.warn("PPTX: could not embed supplemental diagram:", imgErr);
+        }
+        slideFooter(s, slideNum++);
       });
 
       /* ----- CLOSING SLIDE ----- */
@@ -1888,7 +2421,7 @@
         italic: true, fontFace: TOKENS.font
       });
 
-      slideFooter(close, sections.length > 1 ? sections.length + 3 : 3);
+      slideFooter(close, slideNum);
 
       const blob = await P.write("blob");
       downloadBlob(blob, `${safeFilename(data.title)}.pptx`);
@@ -2008,9 +2541,9 @@
       pdf.rect(0, 0, pageW, pageH, "F");
 
       pdf.setFillColor(...rgb(TOKENS.accent));
-      pdf.setGState({ opacity: 0.12 });
+      pdf.setGState(new pdf.GState({ opacity: 0.12 }));
       pdf.circle(pageW + 60, -60, 260, "F");
-      pdf.setGState({ opacity: 1 });
+      pdf.setGState(new pdf.GState({ opacity: 1 }));
 
       // Banner fitted at top (contain style — no stretch, no full background)
       if (bannerDataUrl) {
@@ -2051,6 +2584,7 @@
       pdf.addPage();
 
       /* ----- CONTENT PAGES ----- */
+      let pdfPageNum = 2; // cover = page 1
       (data.sections || []).forEach((sec, i) => {
         // Dark header band (15-20%)
         pdf.setFillColor(...rgb(TOKENS.dark));
@@ -2075,19 +2609,37 @@
           pdf.setFillColor(...rgb(TOKENS.accent));
           pdf.circle(mx + 5, y + 3, 2, "F");
           const lines = pdf.splitTextToSize(c, pageW - mx * 2 - 12);
+          pdf.setTextColor(...rgb(TOKENS.dark));
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(12);
           pdf.text(lines, mx + 14, y);
-          y += lines.length * 7 + 8;
-          if (y > 490) {
+          y += lines.length * 14 + 8;
+          if (y > 470) {
             // Footer hairline + text before new page
             pdf.setDrawColor(...rgb(TOKENS.border));
             pdf.setLineWidth(0.4);
             pdf.line(mx, 500, pageW - mx, 500);
             pdf.setFontSize(9);
             pdf.setTextColor(...rgb(TOKENS.muted));
-            pdf.text(footerText || "NavGPT", mx, 515);
-            pdf.text(`Page ${i + 2}`, pageW - mx, 515, { align: "right" });
+            if (footerText) pdf.text(footerText, mx, 515);
+            pdf.text(`Page ${pdfPageNum}`, pageW - mx, 515, { align: "right" });
             pdf.addPage();
-            y = 40;
+            pdfPageNum++;
+            // Re-draw header on continuation page
+            pdf.setFillColor(...rgb(TOKENS.dark));
+            pdf.roundedRect(0, 0, pageW, 90, 8, 8, "F");
+            pdf.setTextColor(...rgb(TOKENS.accent));
+            pdf.setFont("helvetica", "bold");
+            pdf.setFontSize(11);
+            pdf.text("SECTION " + String(i + 1).padStart(2, "0") + " (cont.)", mx, 35);
+            pdf.setTextColor(255, 255, 255);
+            pdf.setFont("helvetica", "bold");
+            pdf.setFontSize(20);
+            pdf.text(sec.heading || "", mx, 65);
+            pdf.setTextColor(...rgb(TOKENS.dark));
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(12);
+            y = 115;
           }
         });
 
@@ -2097,8 +2649,14 @@
         pdf.line(mx, 500, pageW - mx, 500);
         pdf.setFontSize(9);
         pdf.setTextColor(...rgb(TOKENS.muted));
-        pdf.text(footerText || "NavGPT", mx, 515);
-        pdf.text(`Page ${i + 2}`, pageW - mx, 515, { align: "right" });
+        if (footerText) pdf.text(footerText, mx, 515);
+        pdf.text(`Page ${pdfPageNum}`, pageW - mx, 515, { align: "right" });
+
+        // Add a new page between sections (but not after the last one)
+        if (i < (data.sections || []).length - 1) {
+          pdf.addPage();
+          pdfPageNum++;
+        }
       });
 
       downloadBlob(pdf.output("blob"), `${safeFilename(data.title)}.pdf`);
@@ -2551,7 +3109,7 @@
             "Content-Type": "application/json",
             Authorization: `Bearer ${idToken}`,
           },
-          body: JSON.stringify({ message: text, history, modelId: selectedModelId }),
+          body: JSON.stringify({ message: text, history, modelId: selectedModelId, responseMode }),
           signal: controller.signal,
         });
 
@@ -2561,6 +3119,14 @@
 
         removeTyping();
         stream = createStreamingBubble();
+
+        // Show student-mode badge at top of the bubble
+        if (responseMode === "student") {
+          const tag = document.createElement("div");
+          tag.className = "student-mode-tag";
+          tag.textContent = "🎓 Student Mode — real-world examples";
+          stream.bubbleEl.insertBefore(tag, stream.bubbleEl.firstChild);
+        }
 
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -2616,21 +3182,30 @@
           usedFallbackTemplate = !!finalExportData;
         }
 
+        // Strip render-image blocks from display/storage text
+        const cleanRenderImage = (txt) => txt.replace(/```render-image[\s\S]*?```/gi, "").trim();
+
+        // Render canvas diagrams and collect their data URLs for PPTX embedding
+        const diagramDataUrls = parseAndRenderImages(fullReply, stream.bubbleEl);
+
         if (isStillActiveChat()) {
           if (exportData) {
             let noteHtml = "";
             if (wasTruncated) {
               noteHtml = `<p style="color:var(--muted);font-size:0.82rem;font-style:italic;margin-top:8px;">⚠ The response was cut short (or a garbled line was removed), so this file may have fewer slides/sections/bullets than you asked for.</p>`;
             }
-            stream.contentEl.innerHTML = renderMarkdown(displayText || "Here's what I put together:") + noteHtml;
-            addExportBar(stream.bubbleEl, exportData);
+            stream.contentEl.innerHTML = renderMarkdown(cleanRenderImage(displayText || "Here's what I put together:")) + noteHtml;
+            addExportBar(stream.bubbleEl, exportData, diagramDataUrls);
           } else if (usedFallbackTemplate) {
             const noteHtml = `<p style="color:var(--muted);font-size:0.82rem;font-style:italic;margin-top:8px;">ℹ️ Auto-built from headings and bullets in the response. Worth a quick check before relying on it.</p>`;
-            stream.contentEl.innerHTML = renderMarkdown(fullReply) + noteHtml;
-            addExportBar(stream.bubbleEl, finalExportData);
+            stream.contentEl.innerHTML = renderMarkdown(cleanRenderImage(fullReply)) + noteHtml;
+            addExportBar(stream.bubbleEl, finalExportData, diagramDataUrls);
+          } else {
+            // Update content to strip render-image blocks from visible markdown
+            stream.contentEl.innerHTML = renderMarkdown(cleanRenderImage(fullReply));
           }
         }
-        const cleanReply = exportData ? displayText : fullReply;
+        const cleanReply = exportData ? cleanRenderImage(displayText) : cleanRenderImage(fullReply);
 
         const chatRef = doc(db, "users", currentUser.uid, "chats", sendChatId);
         await addDoc(messagesCol(currentUser.uid, sendChatId), {

@@ -178,12 +178,13 @@ const SYSTEM_PROMPT_STUDENT = `You are NavGPT in Student Mode — a friendly, pa
 When a visual diagram, chart, flowchart, or illustration would meaningfully help the student understand the concept, include EXACTLY ONE fenced code block labeled \`\`\`render-image immediately after your explanation.
 
 Rules for render-image blocks:
-- The canvas is 480 pixels wide × 300 pixels tall.
+- The canvas coordinate space is 480 pixels wide × 300 pixels tall.
 - The variable \`ctx\` is already bound to the 2D rendering context — do NOT declare it.
 - Write clean, self-contained JavaScript drawing code. No external libraries.
 - Always set a white or light background first: ctx.fillStyle="#ffffff"; ctx.fillRect(0,0,480,300);
+- SAFE MARGINS: Keep ALL content (shapes, text, lines) within a 20px inset from every edge — i.e. x: 20–460, y: 20–280. Never draw or place text outside these bounds or it will be clipped.
 - Use the NavGPT accent colour #D97757 for highlights and important elements.
-- Include clear text labels on the diagram using ctx.fillText().
+- Include clear text labels on the diagram using ctx.fillText(). Use ctx.font to set size before drawing text (e.g. ctx.font="13px sans-serif"). Check that label text + position stays within the safe margin.
 - Only include this block when a diagram genuinely adds value. Never include it for simple factual answers.
 
 Example render-image block (bar chart):
